@@ -3,7 +3,7 @@ include (ScreamUtils)
 # Create the test
 SET (TEST_LABELS "mam4;physics;driver")
 set (NEED_LIBS mam scream_control scream_share diagnostics)
-CreateUnitTest(mam4_nucleation_standalone "mam4_nucleation_standalone.cpp" "${NEED_LIBS}" LABELS ${TEST_LABELS}
+CreateUnitTest(mam4_microphysics_standalone "mam4_microphysics_standalone.cpp" "${NEED_LIBS}" LABELS ${TEST_LABELS}
   MPI_RANKS ${TEST_RANK_START} ${TEST_RANK_END}
   PROPERTIES FIXTURES_SETUP mam4_generate_output_nc_files
 )
@@ -16,7 +16,7 @@ set (RUN_T0 2021-10-12-45000)
 ## Copy (and configure) yaml files needed by tests
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/input.yaml
                ${CMAKE_CURRENT_BINARY_DIR}/input.yaml)
-configure_file(mam4_nucleation_output.yaml mam4_nucleation_output.yaml)
+configure_file(mam4_microphysics_output.yaml mam4_microphysics_output.yaml)
 
 # Ensure test input files are present in the data dir
 GetInputFile(scream/init/${EAMxx_tests_IC_FILE_72lev})
@@ -27,7 +27,7 @@ GetInputFile(scream/init/${EAMxx_tests_IC_FILE_72lev})
 #if (TEST_RANK_END GREATER TEST_RANK_START)
 #  include (BuildCprnc)
 #  BuildCprnc()
-#  SET (BASE_TEST_NAME "mam4_nucleation_standalone")
+#  SET (BASE_TEST_NAME "mam4_microphysics_standalone")
 #  math (EXPR CMP_RANK_START ${TEST_RANK_START}+1)
 #  foreach (MPI_RANKS RANGE ${CMP_RANK_START} ${TEST_RANK_END})
 #
@@ -46,8 +46,8 @@ GetInputFile(scream/init/${EAMxx_tests_IC_FILE_72lev})
 ## Check tendency calculation
 #foreach (NRANKS RANGE ${TEST_RANK_START} ${TEST_RANK_END})
 #  set (script ${SCREAM_BASE_DIR}/scripts/check-tendencies)
-#  set (fname mam4_nucleation_standalone_output.INSTANT.nsteps_x1.np${NRANKS}.${RUN_T0}.nc)
-#  set (tname mam4_nucleation_tend_check_np${NRANKS})
+#  set (fname mam4_microphysics_standalone_output.INSTANT.nsteps_x1.np${NRANKS}.${RUN_T0}.nc)
+#  set (tname mam4_microphysics_tend_check_np${NRANKS})
 #  add_test (NAME ${tname}
 #    COMMAND ${script} -f ${fname} -v qc T_mid  #FIXME: Add mam4 tendencies -t p3_qc_tend p3_T_mid_tend
 #    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
