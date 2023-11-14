@@ -1,9 +1,17 @@
 include (ScreamUtils)
 
-# Create the test
+# Create the test for mam4 microphysics
 SET (TEST_LABELS "mam4;physics;driver")
 set (NEED_LIBS mam scream_control scream_share diagnostics)
 CreateUnitTest(mam4_nucleation_standalone "mam4_nucleation_standalone.cpp" "${NEED_LIBS}" LABELS ${TEST_LABELS}
+  MPI_RANKS ${TEST_RANK_START} ${TEST_RANK_END}
+  PROPERTIES FIXTURES_SETUP mam4_generate_output_nc_files
+)
+
+# Create the test for mam4 aerosol cloud interactions
+SET (TEST_LABELS "mam4;aci;physics;driver")
+set (NEED_LIBS mam scream_control scream_share diagnostics)
+CreateUnitTest(mam4_aci_standalone "mam4_aci_standalone.cpp" "${NEED_LIBS}" LABELS ${TEST_LABELS}
   MPI_RANKS ${TEST_RANK_START} ${TEST_RANK_END}
   PROPERTIES FIXTURES_SETUP mam4_generate_output_nc_files
 )
@@ -17,6 +25,13 @@ set (RUN_T0 2021-10-12-45000)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/input.yaml
                ${CMAKE_CURRENT_BINARY_DIR}/input.yaml)
 configure_file(mam4_nucleation_output.yaml mam4_nucleation_output.yaml)
+
+
+## Copy (and configure) yaml files needed by tests
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/input_aci.yaml
+               ${CMAKE_CURRENT_BINARY_DIR}/input_aci.yaml)
+configure_file(mam4_aci_output.yaml mam4_aci_output.yaml)
+
 
 # Ensure test input files are present in the data dir
 GetInputFile(scream/init/${EAMxx_tests_IC_FILE_72lev})
