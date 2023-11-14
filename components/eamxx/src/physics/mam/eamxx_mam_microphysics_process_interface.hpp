@@ -102,6 +102,9 @@ private_except_cuda:
 
       Kokkos::parallel_for(Kokkos::TeamVectorRange(team, nlev_),
         [&] (const int k) {
+
+         // Vertical layer thickness
+          dz_(i,k) = PF::calculate_dz(pdel_(i,k), p_mid_(i,k), T_mid_(i,k), qv_(i,k));
           //--------------------------
           // Vertical velocity from pressure to height
           //--------------------------
