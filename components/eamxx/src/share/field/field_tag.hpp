@@ -40,7 +40,9 @@ enum class FieldTag {
   LongWaveBand,
   LongWaveGpoint,
   IsccpTau,
-  IsccpPrs
+  IsccpPrs,
+  //MAM tags
+  num_modes
 };
 
 // If using tags a lot, consider adding 'using namespace ShortFieldTagsNames'
@@ -64,6 +66,7 @@ namespace ShortFieldTagsNames {
   constexpr auto LWGPT = FieldTag::LongWaveGpoint;
   constexpr auto ISCCPTAU = FieldTag::IsccpTau;
   constexpr auto ISCCPPRS = FieldTag::IsccpPrs;
+  constexpr auto NUM_MODES = FieldTag::num_modes;
 }
 
 inline std::string e2str (const FieldTag ft) {
@@ -115,6 +118,9 @@ inline std::string e2str (const FieldTag ft) {
       break;
     case FieldTag::IsccpPrs:
       name = "ISCCPPRS";
+      break;
+    case FieldTag::num_modes:
+      name = "NUM_MODES";
       break;
     default:
       EKAT_ERROR_MSG("Error! Unrecognized field tag.");
