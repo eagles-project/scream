@@ -480,11 +480,6 @@ protected:
   void run_impl        (const double dt);
   void finalize_impl   ();
 
-
-  // Set local variables using memory provided by
-  // the ATMBufferManager
-  void init_buffers(const ATMBufferManager &buffer_manager);
-
   // Keep track of field dimensions and other scalar values
   // needed in shoc_main
   Int m_num_cols;
