@@ -27,8 +27,8 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/input.yaml
 configure_file(mam4_microphysics_output.yaml mam4_microphysics_output.yaml)
 
 ## Copy (and configure) yaml files needed by tests
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/input_shoc.yaml
-               ${CMAKE_CURRENT_BINARY_DIR}/input_shoc.yaml)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/input_mam_wetscav.yaml
+               ${CMAKE_CURRENT_BINARY_DIR}/input_mam_wetscav.yaml)
 configure_file(shoc_standalone_output.yaml shoc_standalone_output.yaml)
 
 # Ensure test input files are present in the data dir

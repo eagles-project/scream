@@ -14,7 +14,7 @@
 
 namespace scream {
 
-TEST_CASE("shoc-stand-alone", "") {
+TEST_CASE("mam_wetscav-stand-alone", "") {
   using namespace scream;
   using namespace scream::control;
 
@@ -22,7 +22,7 @@ TEST_CASE("shoc-stand-alone", "") {
   ekat::Comm atm_comm (MPI_COMM_WORLD);
 
   // Load ad parameter list
-  std::string fname = "input_shoc.yaml";
+  std::string fname = "input_mam_wetscav.yaml";
   ekat::ParameterList ad_params("Atmosphere Driver");
   parse_yaml_file(fname,ad_params) ;
 
@@ -59,13 +59,10 @@ TEST_CASE("shoc-stand-alone", "") {
     }
   }
 
-  // TODO: get the field repo from the driver, and go get (one of)
-  //       the output(s) of SHOC, to check its numerical value (if possible)
-
   // Finalize
   ad.finalize();
 
-  // If we got here, we were able to run shoc
+  // If we got here, we were able to run mam wetscav
   REQUIRE(true);
 }
 
