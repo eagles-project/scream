@@ -9,8 +9,8 @@ time_stepping:
   number_of_steps: ${NUM_STEPS}
 
 atmosphere_processes:
-  atm_procs_list: [shoc]
-  shoc:
+  atm_procs_list: [mam_wetscav]
+  mam_wetscav:
     number_of_subcycles: ${NUM_SUBCYCLES}
     compute_tendencies: [all]
     lambda_low: 0.001
