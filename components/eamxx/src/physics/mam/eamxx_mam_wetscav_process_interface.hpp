@@ -1,5 +1,5 @@
-#ifndef SCREAM_SHOC_MACROPHYSICS_HPP
-#define SCREAM_SHOC_MACROPHYSICS_HPP
+#ifndef EAMXX_MAM_WETSCAV_HPP
+#define EAMXX_MAM_WETSCAV_HPP
 
 #include "share/atm_process/atmosphere_process.hpp"
 #include "ekat/ekat_parameter_list.hpp"
@@ -13,12 +13,11 @@ namespace scream
 {
 
 /*
- * The class responsible to handle the atmosphere microphysics
+ * The class responsible to handle the aerosol wetscavenging
  *
  * The AD should store exactly ONE instance of this class stored
  * in its list of subcomponents (the AD should make sure of this).
  *
- *  Note: for now, scream is only going to accommodate SHOC as macrophysics
 */
 
 class MAMWetscav : public scream::AtmosphereProcess
@@ -534,4 +533,4 @@ protected:
 
 } // namespace scream
 
-#endif // SCREAM_SHOC_MACROPHYSICS_HPP
+#endif // EAMXX_MAM_WETSCAV_HPP
