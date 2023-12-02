@@ -1,6 +1,14 @@
 include (ScreamUtils)
 
 # Create the test
+SET (TEST_LABELS "shoc;physics;driver")
+set (NEED_LIBS shoc scream_control scream_share diagnostics)
+CreateUnitTest(shoc_standalone1 "shoc_standalone.cpp" "${NEED_LIBS}" LABELS ${TEST_LABELS}
+  MPI_RANKS ${TEST_RANK_START} ${TEST_RANK_END}
+  PROPERTIES FIXTURES_SETUP shoc_generate_output_nc_files
+)
+
+# Create the test
 SET (TEST_LABELS "mam4;physics;driver")
 set (NEED_LIBS mam scream_control scream_share diagnostics)
 CreateUnitTest(mam4_microphysics_standalone "mam4_microphysics_standalone.cpp" "${NEED_LIBS}" LABELS ${TEST_LABELS}
@@ -17,6 +25,11 @@ set (RUN_T0 2021-10-12-45000)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/input.yaml
                ${CMAKE_CURRENT_BINARY_DIR}/input.yaml)
 configure_file(mam4_microphysics_output.yaml mam4_microphysics_output.yaml)
+
+## Copy (and configure) yaml files needed by tests
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/input_shoc.yaml
+               ${CMAKE_CURRENT_BINARY_DIR}/input_shoc.yaml)
+configure_file(shoc_standalone_output.yaml shoc_standalone_output.yaml)
 
 # Ensure test input files are present in the data dir
 GetInputFile(scream/init/${EAMxx_tests_IC_FILE_72lev})
