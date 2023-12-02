@@ -1,6 +1,6 @@
 %YAML 1.1
 ---
-filename_prefix: shoc_standalone_output
+filename_prefix: mam_wetscav_standalone_output
 Averaging Type: Instant
 Fields:
   Physics:
@@ -20,14 +20,6 @@ Fields:
       - tke
       - inv_qc_relvar
       - pbl_height
-      - shoc_T_mid_tend
-      - shoc_qv_tend
-      - shoc_tke_tend
-      - shoc_horiz_winds_tend
-      - shoc_sgs_buoy_flux_tend
-      - shoc_eddy_diff_mom_tend
-      - shoc_qc_tend
-      - shoc_cldfrac_liq_tend
 
 output_control:
   Frequency: 1

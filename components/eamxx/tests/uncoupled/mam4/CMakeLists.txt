@@ -1,9 +1,9 @@
 include (ScreamUtils)
 
 # Create the test
-SET (TEST_LABELS "shoc;physics;driver")
+SET (TEST_LABELS "mam_wetscav;physics;driver")
 set (NEED_LIBS shoc mam scream_control scream_share diagnostics)
-CreateUnitTest(shoc_standalone1 "mam4_wetscav_standalone.cpp" "${NEED_LIBS}" LABELS ${TEST_LABELS}
+CreateUnitTest(mam_wetscav "mam4_wetscav_standalone.cpp" "${NEED_LIBS}" LABELS ${TEST_LABELS}
   MPI_RANKS ${TEST_RANK_START} ${TEST_RANK_END}
   PROPERTIES FIXTURES_SETUP shoc_generate_output_nc_files
 )
