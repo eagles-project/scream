@@ -107,53 +107,11 @@ void MAMWetscav::set_grids(const std::shared_ptr<const GridsManager> grids_manag
   }
 }
 
-// =========================================================================================
-void MAMWetscav::
-set_computed_group_impl (const FieldGroup& group)
-{
-  EKAT_REQUIRE_MSG(group.m_info->size() >= 3,
-                   "Error! Shoc requires at least 3 tracers (tke, qv, qc) as inputs.");
 
-  const auto& name = group.m_info->m_group_name;
-
-  EKAT_REQUIRE_MSG(name=="tracers",
-    "Error! We were not expecting a field group called '" << name << "\n");
-
-  EKAT_REQUIRE_MSG(group.m_info->m_bundled,
-      "Error! Shoc expects bundled fields for tracers.\n");
-
-  // Calculate number of advected tracers
-  m_num_tracers = group.m_info->size();
-}
-
-// =========================================================================================
-size_t MAMWetscav::requested_buffer_size_in_bytes() const
-{
-  const int nlev_packs       = ekat::npack<Spack>(m_num_levs);
-  const int nlevi_packs      = ekat::npack<Spack>(m_num_levs+1);
-  const int num_tracer_packs = ekat::npack<Spack>(m_num_tracers);
-
-  // Number of Reals needed by local views in the interface
-  const size_t interface_request = Buffer::num_1d_scalar_ncol*m_num_cols*sizeof(Real) +
-                                   Buffer::num_1d_scalar_nlev*nlev_packs*sizeof(Spack) +
-                                   Buffer::num_2d_vector_mid*m_num_cols*nlev_packs*sizeof(Spack) +
-                                   Buffer::num_2d_vector_int*m_num_cols*nlevi_packs*sizeof(Spack) +
-                                   Buffer::num_2d_vector_tr*m_num_cols*num_tracer_packs*sizeof(Spack);
-
-  // Number of Reals needed by the WorkspaceManager passed to shoc_main
-  const auto policy       = ekat::ExeSpaceUtils<KT::ExeSpace>::get_default_team_policy(m_num_cols, nlev_packs);
-  const int n_wind_slots  = ekat::npack<Spack>(2)*Spack::n;
-  const int n_trac_slots  = ekat::npack<Spack>(m_num_tracers+3)*Spack::n;
-  const size_t wsm_request= WSM::get_total_bytes_needed(nlevi_packs, 14+(n_wind_slots+n_trac_slots), policy);
-
-  return interface_request + wsm_request;
-}
 
 // =========================================================================================
 void MAMWetscav::init_buffers(const ATMBufferManager &buffer_manager)
 {
-  EKAT_REQUIRE_MSG(buffer_manager.allocated_bytes() >= requested_buffer_size_in_bytes(), "Error! Buffers size not sufficient.\n");
-
   Real* mem = reinterpret_cast<Real*>(buffer_manager.get_memory());
 
   // 1d scalar views
@@ -224,7 +182,6 @@ void MAMWetscav::init_buffers(const ATMBufferManager &buffer_manager)
   s_mem += wsm_size;
 
   size_t used_mem = (reinterpret_cast<Real*>(s_mem) - buffer_manager.get_memory())*sizeof(Real);
-  EKAT_REQUIRE_MSG(used_mem==requested_buffer_size_in_bytes(), "Error! Used memory != requested memory for MAMWetscav.");
 }
 
 // =========================================================================================
@@ -243,74 +200,6 @@ void MAMWetscav::finalize_impl()
 {
   // Do nothing
 }
-// =========================================================================================
-void MAMWetscav::apply_turbulent_mountain_stress()
-{
-  auto surf_drag_coeff_tms = get_field_in("surf_drag_coeff_tms").get_view<const Real*>();
-  auto horiz_winds         = get_field_in("horiz_winds").get_view<const Spack***>();
 
-  auto rrho_i   = m_buffer.rrho_i;
-  auto upwp_sfc = m_buffer.upwp_sfc;
-  auto vpwp_sfc = m_buffer.vpwp_sfc;
-
-  const int nlev_v  = (m_num_levs-1)/Spack::n;
-  const int nlev_p  = (m_num_levs-1)%Spack::n;
-  const int nlevi_v = m_num_levs/Spack::n;
-  const int nlevi_p = m_num_levs%Spack::n;
-
-  Kokkos::parallel_for("apply_tms", KT::RangePolicy(0, m_num_cols), KOKKOS_LAMBDA (const int i) {
-    upwp_sfc(i) -= surf_drag_coeff_tms(i)*horiz_winds(i,0,nlev_v)[nlev_p]/rrho_i(i,nlevi_v)[nlevi_p];
-    vpwp_sfc(i) -= surf_drag_coeff_tms(i)*horiz_winds(i,1,nlev_v)[nlev_p]/rrho_i(i,nlevi_v)[nlevi_p];
-  });
-}
-// =========================================================================================
-void MAMWetscav::check_flux_state_consistency(const double dt)
-{
-  using PC = scream::physics::Constants<Real>;
-  const Real gravit = PC::gravit;
-  const Real qmin   = 1e-12; // minimum permitted constituent concentration (kg/kg)
-
-  const auto& pseudo_density = get_field_in ("pseudo_density").get_view<const Spack**>();
-  const auto& surf_evap      = get_field_out("surf_evap").get_view<Real*>();
-  const auto& qv             = get_field_out("qv").get_view<Spack**>();
-
-  const auto nlevs           = m_num_levs;
-  const auto nlev_packs      = ekat::npack<Spack>(nlevs);
-  const auto last_pack_idx   = (nlevs-1)/Spack::n;
-  const auto last_pack_entry = (nlevs-1)%Spack::n;
-  const auto policy          = ekat::ExeSpaceUtils<KT::ExeSpace>::get_default_team_policy(m_num_cols, nlev_packs);
-  Kokkos::parallel_for("check_flux_state_consistency",
-                       policy,
-                       KOKKOS_LAMBDA (const KT::MemberType& team) {
-    const auto i = team.league_rank();
-
-    const auto& pseudo_density_i = ekat::subview(pseudo_density, i);
-    const auto& qv_i             = ekat::subview(qv, i);
-
-    // reciprocal of pseudo_density at the bottom layer
-    const auto rpdel = 1.0/pseudo_density_i(last_pack_idx)[last_pack_entry];
-
-    // Check if the negative surface latent heat flux can exhaust
-    // the moisture in the lowest model level. If so, apply fixer.
-    const auto condition = surf_evap(i) - (qmin - qv_i(last_pack_idx)[last_pack_entry])/(dt*gravit*rpdel);
-    if (condition < 0) {
-      const auto cc = abs(surf_evap(i)*dt*gravit);
-
-      auto tracer_mass = [&](const int k) {
-        return qv_i(k)*pseudo_density_i(k);
-      };
-      Real mm = ekat::ExeSpaceUtils<KT::ExeSpace>::view_reduction(team, 0, nlevs, tracer_mass);
-
-      EKAT_KERNEL_ASSERT_MSG(mm >= cc, "Error! Total mass of column vapor should be greater than mass of surf_evap.\n");
-
-      Kokkos::parallel_for(Kokkos::TeamVectorRange(team, nlev_packs), [&](const int& k) {
-        const auto adjust = cc*qv_i(k)*pseudo_density_i(k)/mm;
-        qv_i(k) = (qv_i(k)*pseudo_density_i(k) - adjust)/pseudo_density_i(k);
-      });
-
-      surf_evap(i) = 0;
-    }
-  });
-}
 // =========================================================================================
 } // namespace scream

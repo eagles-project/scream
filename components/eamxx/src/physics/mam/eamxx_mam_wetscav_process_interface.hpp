@@ -475,22 +475,11 @@ protected:
 
   void initialize_impl (const RunType run_type);
 
-  // Update flux (if necessary)
-  void check_flux_state_consistency(const double dt);
-
-  // Apply TMS drag coeff to shoc_main inputs (if necessary)
-  void apply_turbulent_mountain_stress ();
-
 protected:
 
   void run_impl        (const double dt);
   void finalize_impl   ();
 
-  // SHOC updates the 'tracers' group.
-  void set_computed_group_impl (const FieldGroup& group);
-
-  // Computes total number of bytes needed for local variables
-  size_t requested_buffer_size_in_bytes() const;
 
   // Set local variables using memory provided by
   // the ATMBufferManager
