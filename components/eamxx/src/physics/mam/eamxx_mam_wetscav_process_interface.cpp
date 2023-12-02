@@ -1,5 +1,5 @@
 #include "ekat/ekat_assert.hpp"
-#include "physics/mam/eamxx_shoc_process_interface.hpp"
+#include "physics/mam/eamxx_mam_wetscav_process_interface.hpp"
 
 #include "share/property_checks/field_lower_bound_check.hpp"
 #include "share/property_checks/field_within_interval_check.hpp"
