@@ -21,7 +21,7 @@ namespace scream
  *  Note: for now, scream is only going to accommodate SHOC as macrophysics
 */
 
-class SHOCMacrophysics : public scream::AtmosphereProcess
+class MAMWetscav : public scream::AtmosphereProcess
 {
   using SHF          = shoc::Functions<Real, DefaultDevice>;
   using PF           = scream::PhysicsFunctions<DefaultDevice>;
@@ -51,7 +51,7 @@ class SHOCMacrophysics : public scream::AtmosphereProcess
 public:
 
   // Constructors
-  SHOCMacrophysics (const ekat::Comm& comm, const ekat::ParameterList& params);
+  MAMWetscav (const ekat::Comm& comm, const ekat::ParameterList& params);
 
   // The type of subcomponent
   AtmosphereProcessType type () const { return AtmosphereProcessType::Physics; }
@@ -144,7 +144,7 @@ public:
       const auto zi_grid_s = ekat::subview(zi_grid, i);
       const auto rrho_s    = ekat::subview(rrho, i);
       const auto rrho_i_s  = ekat::subview(rrho_i, i);
-      SHF::linear_interp(team,zt_grid_s,zi_grid_s,rrho_s,rrho_i_s,nlev,nlev+1,0);
+      //SHF::linear_interp(team,zt_grid_s,zi_grid_s,rrho_s,rrho_i_s,nlev,nlev+1,0);
       team.team_barrier();
 
       // For now, we are considering dy=dx. Here, we
@@ -530,7 +530,7 @@ protected:
   ekat::WorkspaceManager<Spack, KT::Device> workspace_mgr;
 
   std::shared_ptr<const AbstractGrid>   m_grid;
-}; // class SHOCMacrophysics
+}; // class MAMWetscav
 
 } // namespace scream
 

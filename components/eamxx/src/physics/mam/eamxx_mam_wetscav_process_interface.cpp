@@ -10,7 +10,7 @@ namespace scream
 {
 
 // =========================================================================================
-SHOCMacrophysics::SHOCMacrophysics (const ekat::Comm& comm,const ekat::ParameterList& params)
+MAMWetscav::MAMWetscav (const ekat::Comm& comm,const ekat::ParameterList& params)
   : AtmosphereProcess(comm, params)
 {
   /* Anything that can be initialized without grid information can be initialized here.
@@ -19,7 +19,7 @@ SHOCMacrophysics::SHOCMacrophysics (const ekat::Comm& comm,const ekat::Parameter
 }
 
 // =========================================================================================
-void SHOCMacrophysics::set_grids(const std::shared_ptr<const GridsManager> grids_manager)
+void MAMWetscav::set_grids(const std::shared_ptr<const GridsManager> grids_manager)
 {
   using namespace ekat::units;
 
@@ -108,7 +108,7 @@ void SHOCMacrophysics::set_grids(const std::shared_ptr<const GridsManager> grids
 }
 
 // =========================================================================================
-void SHOCMacrophysics::
+void MAMWetscav::
 set_computed_group_impl (const FieldGroup& group)
 {
   EKAT_REQUIRE_MSG(group.m_info->size() >= 3,
@@ -127,7 +127,7 @@ set_computed_group_impl (const FieldGroup& group)
 }
 
 // =========================================================================================
-size_t SHOCMacrophysics::requested_buffer_size_in_bytes() const
+size_t MAMWetscav::requested_buffer_size_in_bytes() const
 {
   const int nlev_packs       = ekat::npack<Spack>(m_num_levs);
   const int nlevi_packs      = ekat::npack<Spack>(m_num_levs+1);
@@ -150,7 +150,7 @@ size_t SHOCMacrophysics::requested_buffer_size_in_bytes() const
 }
 
 // =========================================================================================
-void SHOCMacrophysics::init_buffers(const ATMBufferManager &buffer_manager)
+void MAMWetscav::init_buffers(const ATMBufferManager &buffer_manager)
 {
   EKAT_REQUIRE_MSG(buffer_manager.allocated_bytes() >= requested_buffer_size_in_bytes(), "Error! Buffers size not sufficient.\n");
 
@@ -224,11 +224,11 @@ void SHOCMacrophysics::init_buffers(const ATMBufferManager &buffer_manager)
   s_mem += wsm_size;
 
   size_t used_mem = (reinterpret_cast<Real*>(s_mem) - buffer_manager.get_memory())*sizeof(Real);
-  EKAT_REQUIRE_MSG(used_mem==requested_buffer_size_in_bytes(), "Error! Used memory != requested memory for SHOCMacrophysics.");
+  EKAT_REQUIRE_MSG(used_mem==requested_buffer_size_in_bytes(), "Error! Used memory != requested memory for MAMWetscav.");
 }
 
 // =========================================================================================
-void SHOCMacrophysics::initialize_impl (const RunType run_type)
+void MAMWetscav::initialize_impl (const RunType run_type)
 {
   // Gather runtime options
   runtime_options.lambda_low    = m_params.get<double>("lambda_low");
@@ -430,11 +430,11 @@ void SHOCMacrophysics::initialize_impl (const RunType run_type)
 
   const int ntop_shoc = 0;
   const int nbot_shoc = m_num_levs;
-  m_npbl = SHF::shoc_init(nbot_shoc,ntop_shoc,pref_mid);
+  //m_npbl = SHF::shoc_init(nbot_shoc,ntop_shoc,pref_mid);
 }
 
 // =========================================================================================
-void SHOCMacrophysics::run_impl (const double dt)
+void MAMWetscav::run_impl (const double dt)
 {
   EKAT_REQUIRE_MSG (dt<=300,
       "Error! SHOC is intended to run with a timestep no longer than 5 minutes.\n"
@@ -469,12 +469,12 @@ void SHOCMacrophysics::run_impl (const double dt)
   workspace_mgr.reset_internals();
 
   // Run shoc main
-  SHF::shoc_main(m_num_cols, m_num_levs, m_num_levs+1, m_npbl, m_nadv, m_num_tracers, dt,
+  /*SHF::shoc_main(m_num_cols, m_num_levs, m_num_levs+1, m_npbl, m_nadv, m_num_tracers, dt,
                  workspace_mgr,runtime_options,input,input_output,output,history_output
 #ifdef SCREAM_SMALL_KERNELS
                  , temporaries
 #endif
-                 );
+                 );*/
 
   // Postprocessing of SHOC outputs
   Kokkos::parallel_for("shoc_postprocess",
@@ -483,12 +483,12 @@ void SHOCMacrophysics::run_impl (const double dt)
   Kokkos::fence();
 }
 // =========================================================================================
-void SHOCMacrophysics::finalize_impl()
+void MAMWetscav::finalize_impl()
 {
   // Do nothing
 }
 // =========================================================================================
-void SHOCMacrophysics::apply_turbulent_mountain_stress()
+void MAMWetscav::apply_turbulent_mountain_stress()
 {
   auto surf_drag_coeff_tms = get_field_in("surf_drag_coeff_tms").get_view<const Real*>();
   auto horiz_winds         = get_field_in("horiz_winds").get_view<const Spack***>();
@@ -508,7 +508,7 @@ void SHOCMacrophysics::apply_turbulent_mountain_stress()
   });
 }
 // =========================================================================================
-void SHOCMacrophysics::check_flux_state_consistency(const double dt)
+void MAMWetscav::check_flux_state_consistency(const double dt)
 {
   using PC = scream::physics::Constants<Real>;
   const Real gravit = PC::gravit;

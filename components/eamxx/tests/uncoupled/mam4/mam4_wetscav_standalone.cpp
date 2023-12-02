@@ -38,7 +38,7 @@ TEST_CASE("mam_wetscav-stand-alone", "") {
   // Need to register products in the factory *before* we create any atm process or grids manager.
   auto& proc_factory = AtmosphereProcessFactory::instance();
   auto& gm_factory = GridsManagerFactory::instance();
-  proc_factory.register_product("mam_wetscav",&create_atmosphere_process<SHOCMacrophysics>);
+  proc_factory.register_product("mam_wetscav",&create_atmosphere_process<MAMWetscav>);
   gm_factory.register_product("Mesh Free",&create_mesh_free_grids_manager);
   register_diagnostics();
 
