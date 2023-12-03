@@ -3,7 +3,6 @@
 
 #include "share/atm_process/atmosphere_process.hpp"
 #include "ekat/ekat_parameter_list.hpp"
-#include "physics/shoc/shoc_functions.hpp"
 #include "share/util/scream_common_physics_functions.hpp"
 #include "share/atm_process/ATMBufferManager.hpp"
 
@@ -23,9 +22,6 @@ namespace scream
 class MAMWetscav : public scream::AtmosphereProcess
 {
  
-
- 
-  
 public:
 
   // Constructors
@@ -39,9 +35,6 @@ public:
 
   // Set the grid
   void set_grids (const std::shared_ptr<const GridsManager> grids_manager);
-
-
-
 
 #ifndef KOKKOS_ENABLE_CUDA
   // Cuda requires methods enclosing __device__ lambda's to be public
