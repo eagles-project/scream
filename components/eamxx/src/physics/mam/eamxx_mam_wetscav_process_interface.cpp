@@ -14,7 +14,7 @@ MAMWetscav::MAMWetscav (const ekat::Comm& comm,const ekat::ParameterList& params
   : AtmosphereProcess(comm, params)
 {
   /* Anything that can be initialized without grid information can be initialized here.
-   * Like universal constants, shoc options.
+   * Like universal constants, mam wetscav options.
    */
 }
 
@@ -42,11 +42,11 @@ void MAMWetscav::set_grids(const std::shared_ptr<const GridsManager> grids_manag
   FieldLayout scalar3d_layout_mid { {COL,LEV}, {m_num_cols,m_num_levs} };
 
 
-  constexpr int ps = Spack::n;
 
 
-  // These variables are needed by the interface, but not actually passed to shoc_main.
-  add_field<Updated> ("T_mid",               scalar3d_layout_mid,  K,       grid_name, ps);
+
+  // These variables are needed by the interface.
+  add_field<Updated> ("T_mid",               scalar3d_layout_mid,  K,       grid_name);
   
 }
 

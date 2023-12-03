@@ -22,31 +22,10 @@ namespace scream
 
 class MAMWetscav : public scream::AtmosphereProcess
 {
-  using SHF          = shoc::Functions<Real, DefaultDevice>;
-  using PF           = scream::PhysicsFunctions<DefaultDevice>;
-  using C            = physics::Constants<Real>;
-  using KT           = ekat::KokkosTypes<DefaultDevice>;
+ 
 
-  using Spack                = typename SHF::Spack;
-  using IntSmallPack         = typename SHF::IntSmallPack;
-  using Smask                = typename SHF::Smask;
-  using view_1d_int          = typename KT::template view_1d<Int>;
-  using view_1d              = typename SHF::view_1d<Real>;
-  using view_1d_const        = typename SHF::view_1d<const Real>;
-  using view_2d              = typename SHF::view_2d<SHF::Spack>;
-  using view_2d_const        = typename SHF::view_2d<const Spack>;
-  using sview_2d             = typename KokkosTypes<DefaultDevice>::template view_2d<Real>;
-  using sview_2d_const       = typename KokkosTypes<DefaultDevice>::template view_2d<const Real>;
-  using view_3d              = typename SHF::view_3d<Spack>;
-  using view_3d_const        = typename SHF::view_3d<const Spack>;
-
-  using WSM = ekat::WorkspaceManager<Spack, KT::Device>;
-
-  template<typename ScalarT>
-  using uview_1d = Unmanaged<typename KT::template view_1d<ScalarT>>;
-  template<typename ScalarT>
-  using uview_2d = Unmanaged<typename KT::template view_2d<ScalarT>>;
-
+ 
+  
 public:
 
   // Constructors
@@ -60,6 +39,9 @@ public:
 
   // Set the grid
   void set_grids (const std::shared_ptr<const GridsManager> grids_manager);
+
+
+
 
 #ifndef KOKKOS_ENABLE_CUDA
   // Cuda requires methods enclosing __device__ lambda's to be public
@@ -78,10 +60,6 @@ protected:
   Int m_num_cols;
   Int m_num_levs;
   
-
-
-  // WSM for internal local variables
-  ekat::WorkspaceManager<Spack, KT::Device> workspace_mgr;
 
   std::shared_ptr<const AbstractGrid>   m_grid;
 }; // class MAMWetscav
