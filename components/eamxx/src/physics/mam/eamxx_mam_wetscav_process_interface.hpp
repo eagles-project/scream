@@ -1,7 +1,12 @@
 #ifndef EAMXX_MAM_WETSCAV_HPP
 #define EAMXX_MAM_WETSCAV_HPP
 
+//For MAM4 aerosol configuration
+#include <physics/mam/mam_coupling.hpp>
+
+//For declaring wetscav class derived from atm process class
 #include "share/atm_process/atmosphere_process.hpp"
+
 #include "ekat/ekat_parameter_list.hpp"
 #include "share/util/scream_common_physics_functions.hpp"
 #include "share/atm_process/ATMBufferManager.hpp"
