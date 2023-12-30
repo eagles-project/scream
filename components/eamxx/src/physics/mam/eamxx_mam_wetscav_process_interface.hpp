@@ -1,20 +1,19 @@
 #ifndef EAMXX_MAM_WETSCAV_HPP
 #define EAMXX_MAM_WETSCAV_HPP
 
-//For MAM4 aerosol configuration
+// For MAM4 aerosol configuration
 #include <physics/mam/mam_coupling.hpp>
 
-//For declaring wetscav class derived from atm process class
+// For declaring wetscav class derived from atm process class
 #include "share/atm_process/atmosphere_process.hpp"
 
-#include "ekat/ekat_parameter_list.hpp"
-#include "share/util/scream_common_physics_functions.hpp"
-#include "share/atm_process/ATMBufferManager.hpp"
+// For MAM4 processes
+#include <mam4xx/mam4.hpp>
 
+// For component name
 #include <string>
 
-namespace scream
-{
+namespace scream {
 
 /*
  * The class responsible to handle the aerosol wetscavenging
@@ -22,46 +21,58 @@ namespace scream
  * The AD should store exactly ONE instance of this class stored
  * in its list of subcomponents (the AD should make sure of this).
  *
-*/
+ */
 
-class MAMWetscav : public scream::AtmosphereProcess
-{
- 
-public:
+class MAMWetscav : public scream::AtmosphereProcess {
 
+  using KT = ekat::KokkosTypes<DefaultDevice>;
+
+  // a thread team dispatched to a single vertical column
+  using ThreadTeam = mam4::ThreadTeam;
+
+ public:
   // Constructors
-  MAMWetscav (const ekat::Comm& comm, const ekat::ParameterList& params);
+  MAMWetscav(const ekat::Comm &comm, const ekat::ParameterList &params);
 
   // The type of subcomponent
-  AtmosphereProcessType type () const { return AtmosphereProcessType::Physics; }
+  AtmosphereProcessType type() const { return AtmosphereProcessType::Physics; }
 
   // The name of the subcomponent
-  std::string name () const { return "shoc"; }
+  std::string name() const { return "mam_wetscavenging"; }
 
-  // Set the grid
-  void set_grids (const std::shared_ptr<const GridsManager> grids_manager);
+  // Set the grid and input output variables
+  void set_grids(
+      const std::shared_ptr<const GridsManager> grids_manager) override;
 
-#ifndef KOKKOS_ENABLE_CUDA
-  // Cuda requires methods enclosing __device__ lambda's to be public
-protected:
-#endif
+  // Initialize variables
+  void initialize_impl(const RunType run_type) override;
 
-  void initialize_impl (const RunType run_type);
+  // Run the process by one time step
+  void run_impl(const double dt) override;
 
-protected:
+  // Finalize
+  void finalize_impl(){/*Do nothing*/};
 
-  void run_impl        (const double dt);
-  void finalize_impl   ();
+  /* -----------------------------------------------
+   * Local variables
+   * ------------------------------------------------
+   */
+  // Number of horizontal columns and vertical levels
+  int ncol_, nlev_;
 
-  // Keep track of field dimensions and other scalar values
-  // needed in shoc_main
-  Int m_num_cols;
-  Int m_num_levs;
-  
+  // MAM configuration (particle number and size description)
+  mam4::AeroConfig aero_config_;
 
-  std::shared_ptr<const AbstractGrid>   m_grid;
-}; // class MAMWetscav
 
-} // namespace scream
+  // atmospheric variables
+  mam_coupling::WetAtmosphere wet_atm_;
+  mam_coupling::DryAtmosphere dry_atm_;
 
-#endif // EAMXX_MAM_WETSCAV_HPP
+  mam4::CalcSize calcsize_;
+
+  std::shared_ptr<const AbstractGrid> m_grid;
+};  // class MAMWetscav
+
+}  // namespace scream
+
+#endif  // EAMXX_MAM_WETSCAV_HPP

@@ -14,17 +14,6 @@ atmosphere_processes:
     number_of_subcycles: ${NUM_SUBCYCLES}
     compute_tendencies: [all]
     lambda_low: 0.001
-    lambda_high: 0.04
-    lambda_slope: 2.65
-    lambda_thresh: 0.02
-    thl2tune: 1.0
-    qw2tune: 1.0
-    qwthl2tune: 1.0
-    w2tune: 1.0
-    length_fac: 0.5
-    c_diag_3rd_mom: 7.0
-    Ckh: 0.1
-    Ckm: 0.1
 
 grids_manager:
   Type: Mesh Free
@@ -40,8 +29,6 @@ initial_conditions:
   # The name of the file containing the initial conditions for this test.
   Filename: ${SCREAM_DATA_DIR}/init/${EAMxx_tests_IC_FILE_72lev}
   topography_filename: ${TOPO_DATA_DIR}/${EAMxx_tests_TOPO_FILE}
-  surf_sens_flux: 0.0
-  surf_evap: 0.0
   bc_a1: 1e-5
   cldn: 0.5 
   rprdsh: 1e-5
