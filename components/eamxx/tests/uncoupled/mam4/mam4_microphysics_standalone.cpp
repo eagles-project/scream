@@ -35,7 +35,7 @@ TEST_CASE("mam4-nucleation-standalone", "") {
   // Time stepping parameters
   const auto& ts     = ad_params.sublist("time_stepping");
   const auto  dt     = ts.get<int>("time_step");
-  const auto  nsteps = ts.get<int>("number_of_steps");
+  const auto  nsteps = 2;//ts.get<int>("number_of_steps");
   const auto  t0_str = ts.get<std::string>("run_t0");
   const auto  t0     = util::str_to_time_stamp(t0_str);
 

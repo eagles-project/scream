@@ -138,7 +138,13 @@ void MAMWetscav::initialize_impl (const RunType run_type)
   dry_atm_.T_mid     = get_field_in("T_mid").get_view<const Real**>();
   dry_atm_.p_mid     = get_field_in("p_mid").get_view<const Real**>();
   dry_atm_.p_del     = get_field_in("pseudo_density").get_view<const Real**>();
-  
+
+
+  // configure the nucleation parameterization
+   mam4::CalcSize::Config calcsz_config;
+   mam4::AeroConfig aero_config;
+   calcsize_.init(aero_config, calcsz_config);
+
 }
 
 // =========================================================================================
@@ -177,11 +183,11 @@ void MAMWetscav::run_impl (const double dt)
 
    // loop over atmosphere columns and compute aerosol microphyscs
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const ThreadTeam& team) {
-    const int icol = team.league_rank(); // column index
-   haero::Surface sfc{}; // THis is not used FIXME: add a construtor to return a "const" object, it should be const
+      const int icol = team.league_rank(); // column index
+      haero::Surface sfc{}; // This is not used FIXME: add a construtor to return a "const" object, it should be const
+      //process_.compute_tendencies(team, t, dt, dry_atm_, sfc, progs, diags, tends);
   });
-  //process_.compute_tendencies(team, t, dt, dry_atm_, sfc, progs, diags, tends);
-
+  
 /*
     ! Aerosol water uptake
     call t_startf('wateruptake')
