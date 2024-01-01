@@ -26,6 +26,8 @@ namespace scream {
 class MAMWetscav : public scream::AtmosphereProcess {
 
   using KT = ekat::KokkosTypes<DefaultDevice>;
+  using view_1d = typename KT::template view_1d<Real>;
+
 
   // a thread team dispatched to a single vertical column
   using ThreadTeam = mam4::ThreadTeam;
@@ -69,6 +71,9 @@ class MAMWetscav : public scream::AtmosphereProcess {
   mam_coupling::DryAtmosphere dry_atm_;
 
   mam4::CalcSize calcsize_;
+
+  //const_view_1d dummy_("DummyView", nlev);
+
 
   std::shared_ptr<const AbstractGrid> m_grid;
 };  // class MAMWetscav
