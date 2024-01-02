@@ -239,31 +239,13 @@ void MAMWetscav::run_impl(const double dt) {
    */
 
   // -- call the process to compute size
-  static constexpr Real t =
-      std::numeric_limits<Real>::max();  // This var is never used, so setting
-                                         // it to an unrealistic value
-  static constexpr Real pblh =
-      std::numeric_limits<Real>::max();  // This var is never used, so setting
-                                         // it to an unrealistic value
   view_1d dummy_("DummyView", nlev_); // QUESTION for Jeff: Why can't I declare it in class definition and why it can't be "const_view_1d"
 
   // loop over atmosphere columns and compute aerosol microphyscs
   Kokkos::parallel_for(
       policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
         const int icol = team.league_rank();  // column index
-        // Set up an atmosphere, surface, diagnostics, pronostics and tendencies
-        // class.
-        //NOTE: Calcsize is NOT using any atmosphere state variable, so construct an
-        // object of all const dummy 1d views
-        haero::Atmosphere dummy_atm(
-            nlev_, dummy_, dummy_, dummy_, dummy_, dummy_, dummy_, dummy_, dummy_,
-            dummy_, dummy_, dummy_, pblh);
-
-        // set surface state data
-        haero::Surface sfc{};  // This is not used FIXME: add a construtor to
-                               // return a "const" object, it should be const
-        // process_.compute_tendencies(team, t, dt, dummy_atm, sfc, progs, diags,
-        // tends);
+        
       });
 
   /*

@@ -72,9 +72,7 @@ class MAMWetscav : public scream::AtmosphereProcess {
 
   mam4::CalcSize calcsize_;
 
-  //const_view_1d dummy_("DummyView", nlev);
-
-
+                                         
   std::shared_ptr<const AbstractGrid> m_grid;
 };  // class MAMWetscav
 
