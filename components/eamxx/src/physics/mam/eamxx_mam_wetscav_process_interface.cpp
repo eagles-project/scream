@@ -199,11 +199,6 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   dry_atm_.T_mid = get_field_in("T_mid").get_view<const Real **>();
   dry_atm_.p_mid = get_field_in("p_mid").get_view<const Real **>();
   dry_atm_.p_del = get_field_in("pseudo_density").get_view<const Real **>();
-
-  // configure the calcsize parameterization
-  mam4::CalcSize::Config calcsz_config;
-  mam4::AeroConfig aero_config;
-  calcsize_.init(aero_config, calcsz_config);
 }
 
 // =========================================================================================
@@ -212,16 +207,14 @@ void MAMWetscav::run_impl(const double dt) {
       ekat::ExeSpaceUtils<KT::ExeSpace>::get_default_team_policy(ncol_, nlev_);
 
   /*Fortran code:
-  call modal_aero_calcsize_sub(state%ncol, state%lchnk, state%q, state%pdel, dt,
-  & !in qqcw, ptend, dgnumdry_m=dgncur_a) !inout
+  call modal_aero_calcsize_sub(state%ncol, state%lchnk, state%q, state%pdel,
+  dt, & !in qqcw, ptend, dgnumdry_m=dgncur_a) !inout
 
    ----subroutine modal_aero_calcsize_sub(ncol, lchnk, state_q, pdel, deltat,
   qqcw, ptend, do_adjust_in, & do_aitacc_transfer_in, list_idx_in,
   update_mmr_in, dgnumdry_m) */
   // mam4::CalcSizeProcess process_(aero_config_); //initiate MAM4xx calcsize
   // process
-
-  std::cout << "Balli:" << std::numeric_limits<Real>::max() << std::endl;
 
   /* ----------------------------------------------------------------------------------------
    * Compute particle size using the calcsize process
@@ -232,21 +225,82 @@ void MAMWetscav::run_impl(const double dt) {
   /*
    * -- NOTES: 1. Flags for the inter-mode particle transfer
    * (do_aitacc_transfer) and  size adjustment (do_adjust) are TRUE by default
-   *                a. Size adjustment is only done by changing aerosol numbers
-   * in the modes.
-   *           2. Interstitial and cld borne aerosols (i.e. "tends") mmr will be
-   * updated (update_mmr is TRUE by default)
+   *                a. Size adjustment is only done by changing aerosol
+   * numbers in the modes.
+   *           2. Interstitial and cld borne aerosols (i.e. "tends") mmr will
+   * be updated (update_mmr is TRUE by default)
    */
 
-  // -- call the process to compute size
-  view_1d dummy_("DummyView", nlev_); // QUESTION for Jeff: Why can't I declare it in class definition and why it can't be "const_view_1d"
+  int nspec_amode[ntot_amode_];
+  int lspectype_amode[mam4::ndrop::maxd_aspectype][ntot_amode_];
+  Real specdens_amode[mam4::ndrop::maxd_aspectype];
+  int lmassptr_amode[mam4::ndrop::maxd_aspectype][ntot_amode_];
+  Real spechygro[mam4::ndrop::maxd_aspectype];
 
-  // loop over atmosphere columns and compute aerosol microphyscs
-  Kokkos::parallel_for(
+  int numptr_amode[ntot_amode_];
+  int mam_idx[ntot_amode_][mam4::ndrop::nspec_max];
+  int mam_cnst_idx[ntot_amode_][mam4::ndrop::nspec_max];
+
+  mam4::ndrop::get_e3sm_parameters(nspec_amode, lspectype_amode, lmassptr_amode,
+                             numptr_amode, specdens_amode, spechygro, mam_idx,
+                             mam_cnst_idx);
+
+  Real inv_density[ntot_amode_][mam4::AeroConfig::num_aerosol_ids()] = {};
+  Real num2vol_ratio_min[ntot_amode_]                                = {};
+  Real num2vol_ratio_max[ntot_amode_]                                = {};
+  Real num2vol_ratio_max_nmodes[ntot_amode_]                         = {};
+  Real num2vol_ratio_min_nmodes[ntot_amode_]                         = {};
+  Real num2vol_ratio_nom_nmodes[ntot_amode_]                         = {};
+  Real dgnmin_nmodes[ntot_amode_]                                    = {};
+  Real dgnmax_nmodes[ntot_amode_]                                    = {};
+  Real dgnnom_nmodes[ntot_amode_]                                    = {};
+  Real mean_std_dev_nmodes[ntot_amode_]                              = {};
+
+  bool noxf_acc2ait[mam4::AeroConfig::num_aerosol_ids()]   = {};
+  int n_common_species_ait_accum                           = {};
+  int ait_spec_in_acc[mam4::AeroConfig::num_aerosol_ids()] = {};
+  int acc_spec_in_ait[mam4::AeroConfig::num_aerosol_ids()] = {};
+  mam4::modal_aero_calcsize::init_calcsize(
+      inv_density, num2vol_ratio_min, num2vol_ratio_max,
+      num2vol_ratio_max_nmodes, num2vol_ratio_min_nmodes,
+      num2vol_ratio_nom_nmodes, dgnmin_nmodes, dgnmax_nmodes, dgnnom_nmodes,
+      mean_std_dev_nmodes, noxf_acc2ait, n_common_species_ait_accum,
+      ait_spec_in_acc, acc_spec_in_ait);
+
+  // diagnostics for visible band summed over modes
+
+  // Note: Need to compute inv density using indexing from e3sm
+  for(int imode = 0; imode < ntot_amode_; ++imode) {
+    const int nspec = nspec_amode[imode];
+    for(int isp = 0; isp < nspec; ++isp) {
+      const int idx           = lspectype_amode[isp][imode] - 1;
+      inv_density[imode][isp] = 1.0 / specdens_amode[idx];
+    }  // isp
+  }    // imode
+
+  // loop over atmosphere columns and compute aerosol particle size
+  /*Kokkos::parallel_for(
       policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
         const int icol = team.league_rank();  // column index
-        
+
+        Real dgncur_c_kk[ntot_amode_]   = {};
+        Real dgnumdry_m_kk[ntot_amode_] = {};
+        //  Calculate aerosol size distribution parameters and aerosol water
+        //  uptake
+        // For prognostic aerosols
+modal_aero_calcsize::modal_aero_calcsize_sub(
+    state_q_kk, // in
+    qqcw_k,     // in/out
+    dt, do_adjust, do_aitacc_transfer, update_mmr, lmassptr_amode,
+    numptr_amode,
+    inv_density, // in
+    num2vol_ratio_min, num2vol_ratio_max, num2vol_ratio_max_nmodes,
+    num2vol_ratio_min_nmodes, num2vol_ratio_nom_nmodes, dgnmin_nmodes,
+    dgnmax_nmodes, dgnnom_nmodes, mean_std_dev_nmodes,
+    // outputs
+    noxf_acc2ait, n_common_species_ait_accum, ait_spec_in_
       });
+  * /
 
   /*
       ! Aerosol water uptake

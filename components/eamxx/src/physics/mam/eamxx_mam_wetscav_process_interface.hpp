@@ -10,6 +10,9 @@
 // For MAM4 processes
 #include <mam4xx/mam4.hpp>
 
+//For MAM4 calcsize process (FIXME:should we include it in mam4 or mam_coupling??)
+#include <mam4xx/modal_aero_calcsize.hpp>
+
 // For component name
 #include <string>
 
@@ -62,15 +65,12 @@ class MAMWetscav : public scream::AtmosphereProcess {
   // Number of horizontal columns and vertical levels
   int ncol_, nlev_;
 
-  // MAM configuration (particle number and size description)
-  mam4::AeroConfig aero_config_;
-
+  //Number of aerosol modes
+  static constexpr int ntot_amode_ = mam4::AeroConfig::num_modes();
 
   // atmospheric variables
   mam_coupling::WetAtmosphere wet_atm_;
   mam_coupling::DryAtmosphere dry_atm_;
-
-  mam4::CalcSize calcsize_;
 
                                          
   std::shared_ptr<const AbstractGrid> m_grid;
