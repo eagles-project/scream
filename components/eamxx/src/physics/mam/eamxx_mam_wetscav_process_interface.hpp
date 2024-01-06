@@ -30,6 +30,7 @@ class MAMWetscav : public scream::AtmosphereProcess {
 
   using KT = ekat::KokkosTypes<DefaultDevice>;
   using view_1d = typename KT::template view_1d<Real>;
+  using view_2d = typename KT::template view_2d<Real>;
 
 
   // a thread team dispatched to a single vertical column
@@ -68,9 +69,19 @@ class MAMWetscav : public scream::AtmosphereProcess {
   //Number of aerosol modes
   static constexpr int ntot_amode_ = mam4::AeroConfig::num_modes();
 
+  //Extent for the e3sm's state vector for tracers
+  //--NOTE: The aerosol species are from index 16 to 40 ( or 15 to 39 in C++)
+  //        but we define this variable from 0 to nvars_, where nvars_ is 39.
+  //        Index 0 to 14 has no value
+  static constexpr int nvars_ = mam4::ndrop::nvars;
+
+
   // atmospheric variables
   mam_coupling::WetAtmosphere wet_atm_;
   mam_coupling::DryAtmosphere dry_atm_;
+
+  // aerosol states
+  mam_coupling::AerosolState  wet_aero_, dry_aero_;
 
                                          
   std::shared_ptr<const AbstractGrid> m_grid;
