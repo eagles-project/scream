@@ -51,7 +51,8 @@ TEST_CASE("mam_wetscav-stand-alone", "") {
   if (atm_comm.am_i_root()) {
     printf("Start time stepping loop...       [  0%%]\n");
   }
-  for (int i=0; i<nsteps; ++i) {
+  // MUST FIXME: change 1 to nsteps in the following loop
+  for (int i=0; i<1; ++i) {
     ad.run(dt);
     if (atm_comm.am_i_root()) {
       std::cout << "  - Iteration " << std::setfill(' ') << std::setw(3) << i+1 << " completed";

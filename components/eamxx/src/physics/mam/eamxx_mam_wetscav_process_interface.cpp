@@ -181,6 +181,7 @@ void MAMWetscav::set_grids(
         // are NOT advected
         add_field<Updated>(cld_mmr_field_name, scalar3d_layout_mid, q_unit,
                            grid_name);
+        std::cout<<int_mmr_field_name<<" : "<<cld_mmr_field_name<<std::endl;
       }
     }
   }
@@ -200,26 +201,28 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   dry_atm_.p_mid = get_field_in("p_mid").get_view<const Real **>();
   dry_atm_.p_del = get_field_in("pseudo_density").get_view<const Real **>();
 
-
   // set wet/dry aerosol state data (interstitial aerosols only)
-  for (int m = 0; m < mam_coupling::num_aero_modes(); ++m) {
-    const char* int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(m);
-    wet_aero_.int_aero_nmr[m] = get_field_out(int_nmr_field_name).get_view<Real**>();
-    //dry_aero_.int_aero_nmr[m] = buffer_.dry_int_aero_nmr[m];
-    //MUST FIXME: We should compute dry mmr, not equate it to wet. This is WRONG!!
+  for(int m = 0; m < mam_coupling::num_aero_modes(); ++m) {
+    const char *int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(m);
+    wet_aero_.int_aero_nmr[m] =
+        get_field_out(int_nmr_field_name).get_view<Real **>();
+    // dry_aero_.int_aero_nmr[m] = buffer_.dry_int_aero_nmr[m];
+    // MUST FIXME: We should compute dry mmr, not equate it to wet. This is
+    // WRONG!!
     dry_aero_.int_aero_nmr[m] = wet_aero_.int_aero_nmr[m];
-    for (int a = 0; a < mam_coupling::num_aero_species(); ++a) {
-      const char* int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
-      if (strlen(int_mmr_field_name) > 0) {
-        wet_aero_.int_aero_mmr[m][a] = get_field_out(int_mmr_field_name).get_view<Real**>();
-        //dry_aero_.int_aero_mmr[m][a] = buffer_.dry_int_aero_mmr[m][a];
-        //MUST FIXME: We should compute dry mmr, not equate it to wet. This is WRONG!!
+    for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
+      const char *int_mmr_field_name =
+          mam_coupling::int_aero_mmr_field_name(m, a);
+      if(strlen(int_mmr_field_name) > 0) {
+        wet_aero_.int_aero_mmr[m][a] =
+            get_field_out(int_mmr_field_name).get_view<Real **>();
+        // dry_aero_.int_aero_mmr[m][a] = buffer_.dry_int_aero_mmr[m][a];
+        // MUST FIXME: We should compute dry mmr, not equate it to wet. This is
+        // WRONG!!
         dry_aero_.int_aero_mmr[m][a] = wet_aero_.int_aero_mmr[m][a];
       }
     }
   }
-
-  
 }
 
 // =========================================================================================
@@ -263,8 +266,8 @@ void MAMWetscav::run_impl(const double dt) {
   int mam_cnst_idx[ntot_amode_][mam4::ndrop::nspec_max];
 
   mam4::ndrop::get_e3sm_parameters(nspec_amode, lspectype_amode, lmassptr_amode,
-                             numptr_amode, specdens_amode, spechygro, mam_idx,
-                             mam_cnst_idx);
+                                   numptr_amode, specdens_amode, spechygro,
+                                   mam_idx, mam_cnst_idx);
 
   Real inv_density[ntot_amode_][mam4::AeroConfig::num_aerosol_ids()] = {};
   Real num2vol_ratio_min[ntot_amode_]                                = {};
@@ -299,29 +302,23 @@ void MAMWetscav::run_impl(const double dt) {
     }  // isp
   }    // imode
 
-  /*view_2d state_q("state_q", nlev_, nvars_);
-
-  for(int ilev=0; ilev<nlev_; ilev++){
-    // 1d view of size ngas
-    auto state_q_at_k = ekat::subview(state_q, ilev);
-    mam_coupling::transfer_prognostics_to_work_arrays(progs,
-                     k,
-                     state_q_at_k.data(),
-                     qqcw_q_at_k.data());
-}*/
-  
-
-
+  view_2d state_q("state_q", nlev_, nvars_);
 
   // loop over atmosphere columns and compute aerosol particle size
-  Kokkos::parallel_for(
+  /*Kokkos::parallel_for(
       policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
-        const int icol = team.league_rank();  // column index
-
-      //state_q = mam_coupling::state_q_for_column(dry_aero_,icol);
-
-
-
+        const int icol = team.league_rank();  // column index*/
+  for (int icol=0; icol<ncol_; icol++){
+        std::cout<<"icol:"<<icol<<std::endl;
+        for(int klev = 0; klev < nlev_; klev++) {
+          view_1d state_q_k = ekat::subview(state_q, klev); // 1d view of size (nvars_) for storing all gasses and aerosols : Question: why can't I use auto here?
+          mam_coupling::state_q_for_column_at_one_lev(dry_aero_, icol, klev, state_q_k);
+        }
+        if (icol==1){
+        for(int klev = 0; klev < nvars_; klev++) {
+          std::cout<<"BALLI:"<<klev<<":"<<state_q(1,klev)<<std::endl;
+        }
+        }
         /*Real dgncur_c_kk[ntot_amode_]   = {};
         Real dgnumdry_m_kk[ntot_amode_] = {};
         //  Calculate aerosol size distribution parameters and aerosol water
@@ -337,9 +334,9 @@ modal_aero_calcsize::modal_aero_calcsize_sub(
     num2vol_ratio_min_nmodes, num2vol_ratio_nom_nmodes, dgnmin_nmodes,
     dgnmax_nmodes, dgnnom_nmodes, mean_std_dev_nmodes,
     // outputs
-    noxf_acc2ait, n_common_species_ait_accum, ait_spec_in_ */
-      });
-  
+    noxf_acc2ait, n_common_species_ait_accum, ait_spec_in_ 
+      });*/
+  }
 
   /*
       ! Aerosol water uptake
@@ -592,6 +589,7 @@ modal_aero_calcsize::modal_aero_calcsize_sub(
 
       call wetdep_inputs_unset(dep_inputs)
   */
+ std::cout<<"End of wetscav run"<<std::endl;
 }
 
 // =========================================================================================
