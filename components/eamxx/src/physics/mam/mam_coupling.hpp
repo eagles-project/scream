@@ -36,9 +36,9 @@ using PF = scream::PhysicsFunctions<DefaultDevice>;
 KOKKOS_INLINE_FUNCTION
 constexpr int gasses_start_ind() { return 9; } // gases start at index 9 (index 10 in Fortran version)
 
-//start index of interstitial aerosols in state_q array of e3sm
+//start index of interstitial (or cloudborne) aerosols in state_q (or qqcw) array of e3sm
 KOKKOS_INLINE_FUNCTION
-constexpr int int_aero_start_ind() { return 15; } // aerosols start at index 15 (index 16 in Fortran version)
+constexpr int aero_start_ind() { return 15; } // aerosols start at index 15 (index 16 in Fortran version)
 
 
 // number of constituents in gas chemistry "work arrays"
@@ -529,9 +529,8 @@ mam4::Prognostics aerosols_for_column(const AerosolState &dry_aero,
 }
 
 // Given an AerosolState with views for dry aerosol quantities, creates a
-// mam4::Prognostics object for the column with the given index with
-// ONLY INTERSTITIAL AEROSOL VIEWS DEFINED. This object can be provided to
-// mam4xx for the column.
+// interstitial aerosols 1D view (state_q) for the column with the given index. 
+// This object can be provided to mam4xx for the column.
 KOKKOS_INLINE_FUNCTION
 void state_q_for_column_at_one_lev(const AerosolState &dry_aero,
                                    const int column_index, const int klev,
@@ -550,7 +549,7 @@ void state_q_for_column_at_one_lev(const AerosolState &dry_aero,
     }
   }
   else{
-    s_idx = int_aero_start_ind();// If no gasses; start index for aerosols
+    s_idx = aero_start_ind();// If no gasses; start with the first index of aerosols
   }
 
   // Now start adding aerosols mmr into the state_q
@@ -568,6 +567,39 @@ void state_q_for_column_at_one_lev(const AerosolState &dry_aero,
                            "int_aero_nmr not defined for dry aerosol state!");
     state_q(s_idx) =
         ekat::subview(dry_aero.int_aero_nmr[m], column_index)(klev);
+    s_idx++; //update index
+  }
+}
+
+// Given an AerosolState with views for dry aerosol quantities, creates a
+// cloudborne aerosol mmr 1D view for the column with the given index.
+// This object can be provided to mam4xx for the column.
+KOKKOS_INLINE_FUNCTION
+void qqcw_for_column_at_one_lev(const AerosolState &dry_aero,
+                                const int column_index, const int klev,
+                                view_1d &qqcw) {
+
+  //NOTE: qqcw view has the same dimension and indexing as state_q array.
+  // This array doesn't store gasses, so the indexing starts at aerosols
+
+  // Initialize the start index of qqcw array
+  int s_idx = aero_start_ind();// If no gasses; start index with the first index of aerosols
+
+  // Now start adding cloud borne aerosols mmr into the qqcw
+  for(int m = 0; m < num_aero_modes(); ++m) {
+    // First add the aerosol species mmr
+    for(int a = 0; a < num_aero_species(); ++a) {
+      if(dry_aero.cld_aero_mmr[m][a].data()) {
+        qqcw(s_idx) =
+            ekat::subview(dry_aero.cld_aero_mmr[m][a], column_index)(klev);
+            s_idx++; // update index even if we lack some aerosol mmrs
+      }
+    }
+    // Now add aerosol number mmr
+    EKAT_KERNEL_ASSERT_MSG(dry_aero.cld_aero_nmr[m].data(),
+                           "cld_aero_nmr not defined for dry aerosol state!");
+    qqcw(s_idx) =
+        ekat::subview(dry_aero.cld_aero_nmr[m], column_index)(klev);
     s_idx++; //update index
   }
 }

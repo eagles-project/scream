@@ -1,5 +1,8 @@
 #include "physics/mam/eamxx_mam_wetscav_process_interface.hpp"
 
+// NOTE: see the impl/ directory for the contents of the impl namespace
+#include "impl/compute_particle_size.cpp"
+
 namespace scream {
 
 // =========================================================================================
@@ -181,7 +184,6 @@ void MAMWetscav::set_grids(
         // are NOT advected
         add_field<Updated>(cld_mmr_field_name, scalar3d_layout_mid, q_unit,
                            grid_name);
-        std::cout<<int_mmr_field_name<<" : "<<cld_mmr_field_name<<std::endl;
       }
     }
   }
@@ -206,10 +208,15 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
     const char *int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(m);
     wet_aero_.int_aero_nmr[m] =
         get_field_out(int_nmr_field_name).get_view<Real **>();
+
+    const char *cld_nmr_field_name = mam_coupling::cld_aero_nmr_field_name(m);
+    wet_aero_.cld_aero_nmr[m] =
+        get_field_out(cld_nmr_field_name).get_view<Real **>();
     // dry_aero_.int_aero_nmr[m] = buffer_.dry_int_aero_nmr[m];
     // MUST FIXME: We should compute dry mmr, not equate it to wet. This is
     // WRONG!!
     dry_aero_.int_aero_nmr[m] = wet_aero_.int_aero_nmr[m];
+    dry_aero_.cld_aero_nmr[m] = wet_aero_.cld_aero_nmr[m];
     for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
       const char *int_mmr_field_name =
           mam_coupling::int_aero_mmr_field_name(m, a);
@@ -220,6 +227,17 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
         // MUST FIXME: We should compute dry mmr, not equate it to wet. This is
         // WRONG!!
         dry_aero_.int_aero_mmr[m][a] = wet_aero_.int_aero_mmr[m][a];
+      }
+
+      const char *cld_mmr_field_name =
+          mam_coupling::cld_aero_mmr_field_name(m, a);
+      if(strlen(cld_mmr_field_name) > 0) {
+        wet_aero_.cld_aero_mmr[m][a] =
+            get_field_out(cld_mmr_field_name).get_view<Real **>();
+        // dry_aero_.cld_aero_mmr[m][a] = buffer_.dry_cld_aero_mmr[m][a];
+        // MUST FIXME: We should compute dry mmr, not equate it to wet. This is
+        // WRONG!!
+        dry_aero_.cld_aero_mmr[m][a] = wet_aero_.cld_aero_mmr[m][a];
       }
     }
   }
@@ -303,29 +321,59 @@ void MAMWetscav::run_impl(const double dt) {
   }    // imode
 
   view_2d state_q("state_q", nlev_, nvars_);
+  view_2d qqcw("qqcw", nlev_, nvars_);
 
   // loop over atmosphere columns and compute aerosol particle size
-  /*Kokkos::parallel_for(
+  Kokkos::parallel_for(
       policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
         const int icol = team.league_rank();  // column index*/
-  for (int icol=0; icol<ncol_; icol++){
-        std::cout<<"icol:"<<icol<<std::endl;
-        for(int klev = 0; klev < nlev_; klev++) {
-          view_1d state_q_k = ekat::subview(state_q, klev); // 1d view of size (nvars_) for storing all gasses and aerosols : Question: why can't I use auto here?
-          mam_coupling::state_q_for_column_at_one_lev(dry_aero_, icol, klev, state_q_k);
-        }
-        if (icol==1){
-        for(int klev = 0; klev < nvars_; klev++) {
-          std::cout<<"BALLI:"<<klev<<":"<<state_q(1,klev)<<std::endl;
-        }
-        }
+
+        // impl::compute_particle_size(icol, nlev_, //in
+        //   state_q, qqcw); //in-outs
+
+        // for (int icol=0; icol<ncol_; icol++){
+        // for(int klev = 0; klev < nlev_; klev++) {
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(team, 0, nlev_), [&](int klev) {
+              view_1d state_q_k = ekat::subview(
+                  state_q, klev);  // 1d view of size (nvars_) for storing all
+                                   // gasses and aerosols
+              mam_coupling::state_q_for_column_at_one_lev(dry_aero_, icol, klev,
+                                                          state_q_k);
+
+              view_1d qqcw_k =
+                  ekat::subview(qqcw, klev);  // 1d view of size (nvars_) for
+                                              // storing all gasses and aerosols
+              mam_coupling::qqcw_for_column_at_one_lev(dry_aero_, icol, klev,
+                                                       qqcw_k);
+
+              static constexpr bool do_adjust = true, do_aitacc_transfer = true,
+                                    update_mmr = true;
+
+              Real dgncur_c_kk[ntot_amode_]   = {};
+              Real dgnumdry_m_kk[ntot_amode_] = {};
+              mam4::modal_aero_calcsize::modal_aero_calcsize_sub(
+                  state_q_k.data(),  // in
+                  qqcw_k.data(),     // in/out
+                  dt, do_adjust, do_aitacc_transfer, update_mmr, lmassptr_amode,
+                  numptr_amode,
+                  inv_density,  // in
+                  num2vol_ratio_min, num2vol_ratio_max,
+                  num2vol_ratio_max_nmodes, num2vol_ratio_min_nmodes,
+                  num2vol_ratio_nom_nmodes, dgnmin_nmodes, dgnmax_nmodes,
+                  dgnnom_nmodes, mean_std_dev_nmodes,
+                  // outputs
+                  noxf_acc2ait, n_common_species_ait_accum, ait_spec_in_acc,
+                  acc_spec_in_ait, dgnumdry_m_kk, dgncur_c_kk);
+            });
+
         /*Real dgncur_c_kk[ntot_amode_]   = {};
         Real dgnumdry_m_kk[ntot_amode_] = {};
         //  Calculate aerosol size distribution parameters and aerosol water
         //  uptake
         // For prognostic aerosols
 modal_aero_calcsize::modal_aero_calcsize_sub(
-    state_q_kk, // in
+    state_q_k, // in
     qqcw_k,     // in/out
     dt, do_adjust, do_aitacc_transfer, update_mmr, lmassptr_amode,
     numptr_amode,
@@ -334,9 +382,9 @@ modal_aero_calcsize::modal_aero_calcsize_sub(
     num2vol_ratio_min_nmodes, num2vol_ratio_nom_nmodes, dgnmin_nmodes,
     dgnmax_nmodes, dgnnom_nmodes, mean_std_dev_nmodes,
     // outputs
-    noxf_acc2ait, n_common_species_ait_accum, ait_spec_in_ 
-      });*/
-  }
+    noxf_acc2ait, n_common_species_ait_accum, ait_spec_in_ */
+      });
+  //} // temp for loop end
 
   /*
       ! Aerosol water uptake
@@ -589,7 +637,7 @@ modal_aero_calcsize::modal_aero_calcsize_sub(
 
       call wetdep_inputs_unset(dep_inputs)
   */
- std::cout<<"End of wetscav run"<<std::endl;
+  std::cout << "End of wetscav run" << std::endl;
 }
 
 // =========================================================================================

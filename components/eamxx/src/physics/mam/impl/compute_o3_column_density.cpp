@@ -1,5 +1,8 @@
 namespace scream::impl {
 
+  using KT = ekat::KokkosTypes<ekat::DefaultDevice>;
+  using view_1d       = typename KT::template view_1d<Real>;
+
 KOKKOS_INLINE_FUNCTION
 void compute_o3_column_density(const ThreadTeam& team, const haero::Atmosphere& atm,
                                const mam4::Prognostics &progs, ColumnView o3_col_dens) {
@@ -40,5 +43,8 @@ void compute_o3_column_density(const ThreadTeam& team, const haero::Atmosphere& 
   // sum the o3 column deltas to densities
   mam4::mo_photo::setcol(o3_col_deltas, o3_col_dens);
 }
+
+
+void func1(int i, view_1d abc){}
 
 } // namespace scream::impl

@@ -82,7 +82,6 @@ class MAMWetscav : public scream::AtmosphereProcess {
 
   // aerosol states
   mam_coupling::AerosolState  wet_aero_, dry_aero_;
-
                                          
   std::shared_ptr<const AbstractGrid> m_grid;
 };  // class MAMWetscav
