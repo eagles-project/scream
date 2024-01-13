@@ -1,6 +1,9 @@
 #include "physics/mam/eamxx_mam_wetscav_process_interface.hpp"
 
 // NOTE: see the impl/ directory for the contents of the impl namespace
+#include <type_traits>
+#include <typeinfo>
+
 #include "impl/compute_particle_size.cpp"
 
 namespace scream {
@@ -55,7 +58,10 @@ void MAMWetscav::set_grids(
 
   // -- Input variables that exists in PBUF in EAM
   static constexpr auto nondim = Units::nondimensional();
-  add_field<Required>("cldn", scalar3d_layout_mid, nondim,
+
+  // MUST FIXME: cldt and cldn are the same variables. They must be their
+  // previous step values.
+  add_field<Required>("cldn_prev_step", scalar3d_layout_mid, nondim,
                       grid_name);  // layer cloud fraction [fraction]
   add_field<Required>(
       "rprdsh", scalar3d_layout_mid, kg / kg / s,
@@ -71,7 +77,9 @@ void MAMWetscav::set_grids(
 
   // -- Input variables that exists in PBUF in EAM (in wetdep.F90) in the
   // "inputs" data structure
-  add_field<Required>("cldt", scalar3d_layout_mid, nondim,
+  // MUST FIXME: cldt and cldn are the same variables. They must be their
+  // previous step values.
+  add_field<Required>("cldt_prev_step", scalar3d_layout_mid, nondim,
                       grid_name);  // total cloud fraction [fraction]
   add_field<Required>(
       "qme", scalar3d_layout_mid, kg / kg / s,
@@ -241,6 +249,10 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
       }
     }
   }
+
+  // other fields
+  cldn_prev_step_ = get_field_in("cldn_prev_step").get_view<const Real **>();
+  // cldt_prev_step_ = get_field_in("cldt_prev_step").get_view<const Real **>();
 }
 
 // =========================================================================================
@@ -275,7 +287,7 @@ void MAMWetscav::run_impl(const double dt) {
 
   int nspec_amode[ntot_amode_];
   int lspectype_amode[mam4::ndrop::maxd_aspectype][ntot_amode_];
-  Real specdens_amode[mam4::ndrop::maxd_aspectype];
+  mam4::Real specdens_amode[mam4::ndrop::maxd_aspectype];
   int lmassptr_amode[mam4::ndrop::maxd_aspectype][ntot_amode_];
   Real spechygro[mam4::ndrop::maxd_aspectype];
 
@@ -352,6 +364,9 @@ void MAMWetscav::run_impl(const double dt) {
 
               Real dgncur_c_kk[ntot_amode_]   = {};
               Real dgnumdry_m_kk[ntot_amode_] = {};
+              //  Calculate aerosol size distribution parameters and aerosol
+              //  water
+              //  uptake
               mam4::modal_aero_calcsize::modal_aero_calcsize_sub(
                   state_q_k.data(),  // in
                   qqcw_k.data(),     // in/out
@@ -365,24 +380,37 @@ void MAMWetscav::run_impl(const double dt) {
                   // outputs
                   noxf_acc2ait, n_common_species_ait_accum, ait_spec_in_acc,
                   acc_spec_in_ait, dgnumdry_m_kk, dgncur_c_kk);
-            });
 
-        /*Real dgncur_c_kk[ntot_amode_]   = {};
-        Real dgnumdry_m_kk[ntot_amode_] = {};
-        //  Calculate aerosol size distribution parameters and aerosol water
-        //  uptake
-        // For prognostic aerosols
-modal_aero_calcsize::modal_aero_calcsize_sub(
-    state_q_k, // in
-    qqcw_k,     // in/out
-    dt, do_adjust, do_aitacc_transfer, update_mmr, lmassptr_amode,
-    numptr_amode,
-    inv_density, // in
-    num2vol_ratio_min, num2vol_ratio_max, num2vol_ratio_max_nmodes,
-    num2vol_ratio_min_nmodes, num2vol_ratio_nom_nmodes, dgnmin_nmodes,
-    dgnmax_nmodes, dgnnom_nmodes, mean_std_dev_nmodes,
-    // outputs
-    noxf_acc2ait, n_common_species_ait_accum, ait_spec_in_ */
+              Real dgnumwet_m_kk[ntot_amode_] = {};
+              Real qaerwat_m_kk[ntot_amode_]  = {};
+              // std::cout<<typeid(dry_atm_.T_mid(icol,
+              // klev)).name()<<std::endl;
+              int nspec_amode_tmp[ntot_amode_];
+              for(int imode = 0; imode < ntot_amode_; ++imode)
+                nspec_amode_tmp[imode] = nspec_amode[imode];
+              
+
+              mam4::Real specdens_amode_tmp[mam4::ndrop::maxd_aspectype];
+              mam4::Real spechygro_tmp[mam4::ndrop::maxd_aspectype];
+              int lspectype_amode_tmp[mam4::ndrop::maxd_aspectype][ntot_amode_];
+              for(int ispectype = 0; ispectype < mam4::ndrop::maxd_aspectype; ispectype++){
+                specdens_amode_tmp[ispectype] = specdens_amode[ispectype];
+                spechygro_tmp[ispectype] = spechygro[ispectype];
+                for(int imode = 0; imode < ntot_amode_; ++imode)
+                  lspectype_amode_tmp[ispectype][imode] = lspectype_amode[ispectype][imode];
+              }
+              
+
+              mam4::water_uptake::modal_aero_water_uptake_dr(nspec_amode_tmp, specdens_amode_tmp
+              , spechygro_tmp, lspectype_amode_tmp, state_q_k.data(),dry_atm_.T_mid(icol, klev),
+                  dry_atm_.p_mid(icol, klev), cldn_prev_step_(icol, klev), dgnumdry_m_kk, dgnumwet_m_kk, qaerwat_m_kk);
+
+              /*mam4::water_uptake::modal_aero_water_uptake_dr(
+                  nspec_amode, specdens_amode, spechygro, lspectype_amode,
+                  state_q_k.data(), dry_atm_.T_mid(icol, klev),
+                  dry_atm_.p_mid(icol, klev), cldn_prev_step_(icol, klev),
+                  dgnumdry_m_kk, dgnumwet_m_kk, qaerwat_m_kk);*/
+            });
       });
   //} // temp for loop end
 

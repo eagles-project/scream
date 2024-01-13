@@ -30,7 +30,7 @@ initial_conditions:
   Filename: ${SCREAM_DATA_DIR}/init/${EAMxx_tests_IC_FILE_72lev}
   topography_filename: ${TOPO_DATA_DIR}/${EAMxx_tests_TOPO_FILE}
   bc_a1: 1e-5
-  cldn: 0.5 
+  cldn_prev_step: 0.5 
   rprdsh: 1e-5
   rprddp: 1e-5
   evapcsh: 1e-5
@@ -87,7 +87,7 @@ initial_conditions:
   bc_c4: 1e-5
   mom_c4: 1e-5
 
-  cldt: 1e-5
+  cldt_prev_step: 1e-5
   qme: 1e-5 
   prain: 1e-5
   evapr: 1e-5
