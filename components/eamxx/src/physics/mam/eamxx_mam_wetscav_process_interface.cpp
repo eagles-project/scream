@@ -6,6 +6,14 @@
 
 #include "impl/compute_particle_size.cpp"
 
+/*
+Future work:
+Wirte comments
+write in/outs for all variables clearly
+
+
+*/
+
 namespace scream {
 
 // =========================================================================================
@@ -340,11 +348,6 @@ void MAMWetscav::run_impl(const double dt) {
       policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
         const int icol = team.league_rank();  // column index*/
 
-        // impl::compute_particle_size(icol, nlev_, //in
-        //   state_q, qqcw); //in-outs
-
-        // for (int icol=0; icol<ncol_; icol++){
-        // for(int klev = 0; klev < nlev_; klev++) {
         Kokkos::parallel_for(
             Kokkos::TeamThreadRange(team, 0, nlev_), [&](int klev) {
               view_1d state_q_k = ekat::subview(
@@ -388,42 +391,31 @@ void MAMWetscav::run_impl(const double dt) {
               int nspec_amode_tmp[ntot_amode_];
               for(int imode = 0; imode < ntot_amode_; ++imode)
                 nspec_amode_tmp[imode] = nspec_amode[imode];
-              
 
               mam4::Real specdens_amode_tmp[mam4::ndrop::maxd_aspectype];
               mam4::Real spechygro_tmp[mam4::ndrop::maxd_aspectype];
               int lspectype_amode_tmp[mam4::ndrop::maxd_aspectype][ntot_amode_];
-              for(int ispectype = 0; ispectype < mam4::ndrop::maxd_aspectype; ispectype++){
+              for(int ispectype = 0; ispectype < mam4::ndrop::maxd_aspectype;
+                  ispectype++) {
                 specdens_amode_tmp[ispectype] = specdens_amode[ispectype];
-                spechygro_tmp[ispectype] = spechygro[ispectype];
+                spechygro_tmp[ispectype]      = spechygro[ispectype];
                 for(int imode = 0; imode < ntot_amode_; ++imode)
-                  lspectype_amode_tmp[ispectype][imode] = lspectype_amode[ispectype][imode];
+                  lspectype_amode_tmp[ispectype][imode] =
+                      lspectype_amode[ispectype][imode];
               }
-              
 
-              mam4::water_uptake::modal_aero_water_uptake_dr(nspec_amode_tmp, specdens_amode_tmp
-              , spechygro_tmp, lspectype_amode_tmp, state_q_k.data(),dry_atm_.T_mid(icol, klev),
-                  dry_atm_.p_mid(icol, klev), cldn_prev_step_(icol, klev), dgnumdry_m_kk, dgnumwet_m_kk, qaerwat_m_kk);
+              mam4::water_uptake::modal_aero_water_uptake_dr(
+                  nspec_amode_tmp, specdens_amode_tmp, spechygro_tmp,
+                  lspectype_amode_tmp, state_q_k.data(),
+                  dry_atm_.T_mid(icol, klev), dry_atm_.p_mid(icol, klev),
+                  cldn_prev_step_(icol, klev), dgnumdry_m_kk, dgnumwet_m_kk,
+                  qaerwat_m_kk);
+            });  // klev parallel_for loop
+      });        // icol parallel_for loop
 
-              /*mam4::water_uptake::modal_aero_water_uptake_dr(
-                  nspec_amode, specdens_amode, spechygro, lspectype_amode,
-                  state_q_k.data(), dry_atm_.T_mid(icol, klev),
-                  dry_atm_.p_mid(icol, klev), cldn_prev_step_(icol, klev),
-                  dgnumdry_m_kk, dgnumwet_m_kk, qaerwat_m_kk);*/
-            });
-      });
-  //} // temp for loop end
+  //wetdep_.compute_tendencies1(const mam4::AeroConfig &config);
 
   /*
-      ! Aerosol water uptake
-      call t_startf('wateruptake')
-      call modal_aero_wateruptake_dr(lchnk, ncol, state_q, temperature, pmid, &
-     ! in cldn, dgncur_a, & ! in dgnumwet,  qaerwat, & ! inout wetdens=wetdens
-     ) ! optional inout call t_stopf('wateruptake')
-
-      ! skip wet deposition if nwetdep is non-positive
-      if (nwetdep<1) return
-
       call calc_sfc_flux(rprdsh(:ncol,:),  state%pdel(:ncol,:),
      rprdshsum(:ncol))  ! output the last argument call
      calc_sfc_flux(rprddp(:ncol,:),  state%pdel(:ncol,:), rprddpsum(:ncol))  !

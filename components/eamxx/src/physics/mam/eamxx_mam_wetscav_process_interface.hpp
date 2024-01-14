@@ -10,8 +10,11 @@
 // For MAM4 processes
 #include <mam4xx/mam4.hpp>
 
-//For MAM4 calcsize process (FIXME:should we include it in mam4 or mam_coupling??)
+// For MAM4 calcsize process (FIXME:should we include it in mam4 or mam_coupling??)
 #include <mam4xx/modal_aero_calcsize.hpp>
+
+// For wetdep processes
+#include <mam4xx/wet_dep.hpp>
 
 // For component name
 #include <string>
@@ -86,6 +89,9 @@ class MAMWetscav : public scream::AtmosphereProcess {
 
   // aerosol states
   mam_coupling::AerosolState  wet_aero_, dry_aero_;
+
+  mam4::WetDeposition wetdep_;
+  
                                          
   std::shared_ptr<const AbstractGrid> m_grid;
 };  // class MAMWetscav
