@@ -203,6 +203,9 @@ void MAMWetscav::set_grids(
       }
     }
   }
+
+  add_field<Required>("qv", scalar3d_layout_mid, q_unit, grid_name,
+                      "tracers");  // ice cloud water [kg/kg] wet
 }
 
 // =========================================================================================
@@ -218,6 +221,18 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   dry_atm_.T_mid = get_field_in("T_mid").get_view<const Real **>();
   dry_atm_.p_mid = get_field_in("p_mid").get_view<const Real **>();
   dry_atm_.p_del = get_field_in("pseudo_density").get_view<const Real **>();
+
+  
+  //dry_atm_.qv        = get_field_in("qv").get_view< Real **>();
+  /*dry_atm_.qc        = invalid_view_Real_2d;
+  dry_atm_.nc        = invalid_view_Real_2d;
+  dry_atm_.qi        = invalid_view_Real_2d;
+  dry_atm_.ni        = invalid_view_Real_2d;
+  dry_atm_.z_mid     = invalid_view_Real_2d;
+  dry_atm_.p_del     = invalid_view_Real_2d;
+  dry_atm_.cldfrac   = invalid_view_Real_2d;
+  dry_atm_.w_updraft = invalid_view_Real_2d;
+  dry_atm_.pblh      = invalid_view_Real_1d;*/
 
   // set wet/dry aerosol state data (interstitial aerosols only)
   for(int m = 0; m < mam_coupling::num_aero_modes(); ++m) {
@@ -261,6 +276,10 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   // other fields
   cldn_prev_step_ = get_field_in("cldn_prev_step").get_view<const Real **>();
   // cldt_prev_step_ = get_field_in("cldt_prev_step").get_view<const Real **>();
+
+
+  // set up our preprocess/postprocess functors
+  //preprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_, dry_aero_);
 }
 
 // =========================================================================================
@@ -410,10 +429,18 @@ void MAMWetscav::run_impl(const double dt) {
                   dry_atm_.T_mid(icol, klev), dry_atm_.p_mid(icol, klev),
                   cldn_prev_step_(icol, klev), dgnumdry_m_kk, dgnumwet_m_kk,
                   qaerwat_m_kk);
+
+              // call wetdep for computing....add mod=re descriptive comment here?
+              mam4::AeroConfig wetdep_config;
+              /*auto atm = mam_coupling::atmosphere_for_column(dry_atm_,icol);
+              wetdep_.compute_tendencies1(wetdep_config,team,
+                          0, dt, atm);*/
+
+
             });  // klev parallel_for loop
       });        // icol parallel_for loop
 
-  //wetdep_.compute_tendencies1(const mam4::AeroConfig &config);
+  
 
   /*
       call calc_sfc_flux(rprdsh(:ncol,:),  state%pdel(:ncol,:),
