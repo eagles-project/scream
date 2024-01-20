@@ -253,39 +253,51 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   // Gather runtime options
   //(e.g.) runtime_options.lambda_low    = m_params.get<double>("lambda_low");
 
-  // populate the wet and dry atmosphere states with views from fields and
-  // the buffer
+  // populate the wet atmosphere state with views from fields and
+  // the buffer (NOTE: wet atmosphere only has qv, qc, qi, nc, ni and omega)
   wet_atm_.qc = get_field_in("qc").get_view<const Real **>();
   wet_atm_.qi = get_field_in("qi").get_view<const Real **>();
 
-  dry_atm_.T_mid = get_field_in("T_mid").get_view<const Real **>();
-  dry_atm_.p_mid = get_field_in("p_mid").get_view<const Real **>();
-  dry_atm_.p_del = get_field_in("pseudo_density").get_view<const Real **>();
-
-  // Following variables are NOT used by the process but we still need them to
-  // creat atmosphere object from dry_atm_
-  wet_atm_.qv    = get_field_in("qv").get_view<const Real **>();
-  wet_atm_.nc    = get_field_in("nc").get_view<const Real **>();
-  wet_atm_.ni    = get_field_in("ni").get_view<const Real **>();
+  // -- Following wet atm variables are NOT used by the process but we still need them to
+  // -- create atmosphere object
+  wet_atm_.qv    = get_field_in("qv"   ).get_view<const Real **>();
+  wet_atm_.nc    = get_field_in("nc"   ).get_view<const Real **>();
+  wet_atm_.ni    = get_field_in("ni"   ).get_view<const Real **>();
   wet_atm_.omega = get_field_in("omega").get_view<const Real **>();
 
-  // dry_atm_.qv        = buffer_.qv_dry;//MUST FIXME: find out how it works? we
-  // didn't define qv....
-  /*dry_atm_.cldfrac   = get_field_in("cldfrac_tot").get_view<const Real**>();
-  // FIXME: tot or liq? dry_atm_.pblh      =
-  get_field_in("pbl_height").get_view<const Real*>(); dry_atm_.phis      =
-  get_field_in("phis").get_view<const Real*>();*/
-  dry_atm_.z_mid   = buffer_.z_mid;
-  dry_atm_.dz      = buffer_.dz;
-  dry_atm_.z_iface = buffer_.z_iface;
-  dry_atm_.qv      = buffer_.qv_dry;
-  dry_atm_.qc      = buffer_.qc_dry;
-  dry_atm_.nc      = buffer_.nc_dry;
-  dry_atm_.qi      = buffer_.qi_dry;
-  dry_atm_.ni      = buffer_.ni_dry;
-  dry_atm_.w_updraft = buffer_.w_updraft;
-  dry_atm_.z_surf = 0.0;  // FIXME: for now
+  // populate the dry atmosphere state with views from fields
+  // (NOTE: dry atmosphere has everything that wet 
+  // atmosphere has along with z_surf, T_mid, p_mid, z_mid, z_iface,
+  // dz, p_del, cldfrac, w_updraft, pblh, phis)
+  dry_atm_.T_mid = get_field_in("T_mid"         ).get_view<const Real **>();
+  dry_atm_.p_mid = get_field_in("p_mid"         ).get_view<const Real **>();
+  dry_atm_.p_del = get_field_in("pseudo_density").get_view<const Real **>();
 
+  // How "buffer_" works: We use buffer to allocate memory for the members of 
+  // dry_atm_ object. Here we are providing those memory locations to the dry_atm_
+  // members. These members are computed from the above wet_atm_ or dyr_atm_
+  // members that are explicitly getting their values either from the inout file
+  // or from other processes.
+
+  dry_atm_.qv        = buffer_.qv_dry;
+  dry_atm_.qc        = buffer_.qc_dry;
+  dry_atm_.nc        = buffer_.nc_dry;
+  dry_atm_.qi        = buffer_.qi_dry;
+  dry_atm_.ni        = buffer_.ni_dry;
+  dry_atm_.z_mid     = buffer_.z_mid;
+  dry_atm_.dz        = buffer_.dz;
+  dry_atm_.z_iface   = buffer_.z_iface;
+  dry_atm_.w_updraft = buffer_.w_updraft;
+
+  // The following variables  *may* not be used by the process but they are
+  // needed for creating MAM4xx class objects like Atmosphere
+  dry_atm_.cldfrac = get_field_in("cldfrac_tot").get_view<const Real**>();
+  dry_atm_.pblh    = get_field_in("pbl_height").get_view<const Real*>();
+  dry_atm_.phis    = get_field_in("phis").get_view<const Real*>();
+  dry_atm_.z_surf  = 0.0;  // MUST FIXME: for now
+  cldn_prev_step_  = get_field_in("cldn_prev_step").get_view<const Real **>();
+  // cldt_prev_step_ = get_field_in("cldt_prev_step").get_view<const Real **>();
+  
   // set wet/dry aerosol state data (interstitial aerosols only)
   for(int imode = 0; imode < mam_coupling::num_aero_modes(); ++imode) {
     const char *int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(imode);
@@ -325,9 +337,7 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
     }
   }
 
-  // other fields
-  cldn_prev_step_ = get_field_in("cldn_prev_step").get_view<const Real **>();
-  // cldt_prev_step_ = get_field_in("cldt_prev_step").get_view<const Real **>();
+  
 
   // set up our preprocess/postprocess functors
   preprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_,
