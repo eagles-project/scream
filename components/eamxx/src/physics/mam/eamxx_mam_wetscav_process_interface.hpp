@@ -95,11 +95,11 @@ class MAMWetscav : public scream::AtmosphereProcess {
     void operator()(const Kokkos::TeamPolicy<KT::ExeSpace>::member_type& team) const {
       const int i = team.league_rank(); // column index
 
+      compute_dry_mixing_ratios(team, wet_atm_pre_, dry_atm_pre_, i);
       compute_vertical_layer_heights(team, dry_atm_pre_, i);
       team.team_barrier(); // allows kernels below to use layer heights
       compute_updraft_velocities(team, wet_atm_pre_, dry_atm_pre_, i);
-      /*compute_dry_mixing_ratios(team, wet_atm_pre_, dry_atm_pre_, i);
-      compute_dry_mixing_ratios(team, wet_atm_pre_, wet_aero_pre_, dry_aero_pre_, i);*/
+      //compute_dry_mixing_ratios(team, wet_atm_pre_, wet_aero_pre_, dry_aero_pre_, i);
       team.team_barrier();
     } // operator()
      

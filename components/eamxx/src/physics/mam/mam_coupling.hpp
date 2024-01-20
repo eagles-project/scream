@@ -639,6 +639,8 @@ void compute_updraft_velocities(const Team &team, const WetAtmosphere &wet_atm,
   constexpr int nlev = mam4::nlev;
   int i              = column_index;
   Kokkos::parallel_for(Kokkos::TeamVectorRange(team, nlev), [&](const int k) {
+
+    dry_atm.dz(i, k) = PF::calculate_dz(dry_atm.p_del(i,k), dry_atm.p_mid(i,k), dry_atm.T_mid(i,k), dry_atm.qv(i,k));
     const auto rho =
         PF::calculate_density(dry_atm.p_del(i, k), dry_atm.dz(i, k));
     dry_atm.w_updraft(i, k) =

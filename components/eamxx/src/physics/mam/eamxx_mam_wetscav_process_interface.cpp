@@ -319,59 +319,26 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   // dry_aero_);
 }
 
-Real calculate_vertical_velocity(
+/*Real calculate_vertical_velocity(
       const Real &omega, const Real &density) {
     
 
     static constexpr auto g = 9.8;
     return 1;  // return -omega/(density * g);
-  }
+  }*/
 
 // =========================================================================================
 void MAMWetscav::run_impl(const double dt) {
   
-  using PF = scream::PhysicsFunctions<DefaultDevice>;
-
-
-
-
-
   const auto scan_policy = ekat::ExeSpaceUtils<
       KT::ExeSpace>::get_thread_range_parallel_scan_team_policy(ncol_, nlev_);
   const auto policy =
       ekat::ExeSpaceUtils<KT::ExeSpace>::get_default_team_policy(ncol_, nlev_);
 
-  /*Kokkos::parallel_for(
-        policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
-        const int i = team.league_rank(); // column index*/
-  for(int i = 0; i < ncol_; ++i) {
-    for(int k = 0; k < nlev_; ++k) {
-      dry_atm_.dz(i, k) =
-          PF::calculate_dz(dry_atm_.p_del(i, k), dry_atm_.p_mid(i, k),
-                           dry_atm_.T_mid(i, k), wet_atm_.qv(i, k));
-      const auto rho =
-          PF::calculate_density(dry_atm_.p_del(i, k), dry_atm_.dz(i, k));
-      //std::cout << i << " " << k << " " << wet_atm_.omega(i, k) << "  " << rho
-       //         << std::endl;
-       dry_atm_.w_updraft(i, k) =
-          calculate_vertical_velocity(wet_atm_.omega(i, k), rho);
-    }
-    std::cout << dry_atm_.dz(i, 55) << " " << dry_atm_.dz(i, 0) << "  "
-              << wet_atm_.qv(i, 55) << std::endl;
-
-    // mam_coupling::compute_vertical_layer_heights(team, dry_atm_, i);
-
-    // team.team_barrier(); // allows kernels below to use layer heights
-    // mam_coupling::compute_updraft_velocities(team, wet_atm_, dry_atm_, i);
-    /*compute_dry_mixing_ratios(team, wet_atm_pre_, dry_atm_pre_, i);
-    compute_dry_mixing_ratios(team, wet_atm_pre_, wet_aero_pre_, dry_aero_pre_,
-    i);*/
-    // team.team_barrier();
-  }
-  //);
+  
 
   // preprocess input -- needs a scan for the calculation of atm height
-  // Kokkos::parallel_for("preprocess", scan_policy, preprocess_);
+  Kokkos::parallel_for("preprocess", scan_policy, preprocess_);
   Kokkos::fence();
 
   /*Fortran code:
