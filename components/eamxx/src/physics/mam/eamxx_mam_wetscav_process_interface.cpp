@@ -50,6 +50,8 @@ void MAMWetscav::set_grids(
   // interfaces
   const FieldLayout scalar3d_layout_mid{{COL, LEV}, {ncol_, nlev_}};
 
+  const FieldLayout scalar2d_layout_mid{{COL}, {ncol_}};
+
   // -------------------------------------------------------------------------------------------------------------------------
   // These variables are "required" or pure inputs for the process
   // -------------------------------------------------------------------------------------------------------------------------
@@ -204,8 +206,29 @@ void MAMWetscav::set_grids(
     }
   }
 
-  add_field<Required>("qv", scalar3d_layout_mid, q_unit, grid_name,
-                      "tracers");  // ice cloud water [kg/kg] wet
+  add_field<Required>("cldfrac_tot", scalar3d_layout_mid, nondim,
+                      grid_name);                                        //
+  add_field<Required>("pbl_height", scalar2d_layout_mid, m, grid_name);  //
+  add_field<Required>("phis", scalar2d_layout_mid, m, grid_name);        //
+  add_field<Required>("qv", scalar3d_layout_mid, m, grid_name);          //
+  add_field<Required>("nc", scalar3d_layout_mid, m, grid_name);          //
+  add_field<Required>("ni", scalar3d_layout_mid, m, grid_name);          //
+  add_field<Required>("omega", scalar3d_layout_mid, m, grid_name);       //
+}
+
+size_t MAMWetscav::requested_buffer_size_in_bytes() const {
+  return mam_coupling::buffer_size(ncol_, nlev_);
+}
+
+void MAMWetscav::init_buffers(const ATMBufferManager &buffer_manager) {
+  EKAT_REQUIRE_MSG(
+      buffer_manager.allocated_bytes() >= requested_buffer_size_in_bytes(),
+      "Error! Insufficient buffer size.\n");
+
+  size_t used_mem =
+      mam_coupling::init_buffer(buffer_manager, ncol_, nlev_, buffer_);
+  EKAT_REQUIRE_MSG(used_mem == requested_buffer_size_in_bytes(),
+                   "Error! Used memory != requested memory for MAMWetscav.");
 }
 
 // =========================================================================================
@@ -222,17 +245,29 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   dry_atm_.p_mid = get_field_in("p_mid").get_view<const Real **>();
   dry_atm_.p_del = get_field_in("pseudo_density").get_view<const Real **>();
 
-  
-  //dry_atm_.qv        = get_field_in("qv").get_view< Real **>();
-  /*dry_atm_.qc        = invalid_view_Real_2d;
-  dry_atm_.nc        = invalid_view_Real_2d;
-  dry_atm_.qi        = invalid_view_Real_2d;
-  dry_atm_.ni        = invalid_view_Real_2d;
-  dry_atm_.z_mid     = invalid_view_Real_2d;
-  dry_atm_.p_del     = invalid_view_Real_2d;
-  dry_atm_.cldfrac   = invalid_view_Real_2d;
-  dry_atm_.w_updraft = invalid_view_Real_2d;
-  dry_atm_.pblh      = invalid_view_Real_1d;*/
+  // Following variables are NOT used by the process but we still need them to
+  // creat atmosphere object from dry_atm_
+  wet_atm_.qv    = get_field_in("qv").get_view<const Real **>();
+  wet_atm_.nc    = get_field_in("nc").get_view<const Real **>();
+  wet_atm_.ni    = get_field_in("ni").get_view<const Real **>();
+  wet_atm_.omega = get_field_in("omega").get_view<const Real **>();
+
+  // dry_atm_.qv        = buffer_.qv_dry;//MUST FIXME: find out how it works? we
+  // didn't define qv....
+  /*dry_atm_.cldfrac   = get_field_in("cldfrac_tot").get_view<const Real**>();
+  // FIXME: tot or liq? dry_atm_.pblh      =
+  get_field_in("pbl_height").get_view<const Real*>(); dry_atm_.phis      =
+  get_field_in("phis").get_view<const Real*>();*/
+  dry_atm_.z_mid   = buffer_.z_mid;
+  dry_atm_.dz      = buffer_.dz;
+  dry_atm_.z_iface = buffer_.z_iface;
+  dry_atm_.qv      = buffer_.qv_dry;
+  dry_atm_.qc      = buffer_.qc_dry;
+  dry_atm_.nc      = buffer_.nc_dry;
+  dry_atm_.qi      = buffer_.qi_dry;
+  dry_atm_.ni      = buffer_.ni_dry;
+  dry_atm_.w_updraft = buffer_.w_updraft;
+  dry_atm_.z_surf = 0.0;  // FIXME: for now
 
   // set wet/dry aerosol state data (interstitial aerosols only)
   for(int m = 0; m < mam_coupling::num_aero_modes(); ++m) {
@@ -277,15 +312,67 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   cldn_prev_step_ = get_field_in("cldn_prev_step").get_view<const Real **>();
   // cldt_prev_step_ = get_field_in("cldt_prev_step").get_view<const Real **>();
 
-
   // set up our preprocess/postprocess functors
-  //preprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_, dry_aero_);
+  preprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_,
+                         dry_aero_);
+  // postprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_,
+  // dry_aero_);
 }
+
+Real calculate_vertical_velocity(
+      const Real &omega, const Real &density) {
+    
+
+    static constexpr auto g = 9.8;
+    return 1;  // return -omega/(density * g);
+  }
 
 // =========================================================================================
 void MAMWetscav::run_impl(const double dt) {
+  
+  using PF = scream::PhysicsFunctions<DefaultDevice>;
+
+
+
+
+
+  const auto scan_policy = ekat::ExeSpaceUtils<
+      KT::ExeSpace>::get_thread_range_parallel_scan_team_policy(ncol_, nlev_);
   const auto policy =
       ekat::ExeSpaceUtils<KT::ExeSpace>::get_default_team_policy(ncol_, nlev_);
+
+  /*Kokkos::parallel_for(
+        policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
+        const int i = team.league_rank(); // column index*/
+  for(int i = 0; i < ncol_; ++i) {
+    for(int k = 0; k < nlev_; ++k) {
+      dry_atm_.dz(i, k) =
+          PF::calculate_dz(dry_atm_.p_del(i, k), dry_atm_.p_mid(i, k),
+                           dry_atm_.T_mid(i, k), wet_atm_.qv(i, k));
+      const auto rho =
+          PF::calculate_density(dry_atm_.p_del(i, k), dry_atm_.dz(i, k));
+      //std::cout << i << " " << k << " " << wet_atm_.omega(i, k) << "  " << rho
+       //         << std::endl;
+       dry_atm_.w_updraft(i, k) =
+          calculate_vertical_velocity(wet_atm_.omega(i, k), rho);
+    }
+    std::cout << dry_atm_.dz(i, 55) << " " << dry_atm_.dz(i, 0) << "  "
+              << wet_atm_.qv(i, 55) << std::endl;
+
+    // mam_coupling::compute_vertical_layer_heights(team, dry_atm_, i);
+
+    // team.team_barrier(); // allows kernels below to use layer heights
+    // mam_coupling::compute_updraft_velocities(team, wet_atm_, dry_atm_, i);
+    /*compute_dry_mixing_ratios(team, wet_atm_pre_, dry_atm_pre_, i);
+    compute_dry_mixing_ratios(team, wet_atm_pre_, wet_aero_pre_, dry_aero_pre_,
+    i);*/
+    // team.team_barrier();
+  }
+  //);
+
+  // preprocess input -- needs a scan for the calculation of atm height
+  // Kokkos::parallel_for("preprocess", scan_policy, preprocess_);
+  Kokkos::fence();
 
   /*Fortran code:
   call modal_aero_calcsize_sub(state%ncol, state%lchnk, state%q, state%pdel,
@@ -359,7 +446,9 @@ void MAMWetscav::run_impl(const double dt) {
     }  // isp
   }    // imode
 
-  view_2d state_q("state_q", nlev_, nvars_);
+  view_2d state_q(
+      "state_q", nlev_,
+      nvars_);  // MUST FIXME: make it is 3d view to avoid race condition
   view_2d qqcw("qqcw", nlev_, nvars_);
 
   // loop over atmosphere columns and compute aerosol particle size
@@ -430,17 +519,14 @@ void MAMWetscav::run_impl(const double dt) {
                   cldn_prev_step_(icol, klev), dgnumdry_m_kk, dgnumwet_m_kk,
                   qaerwat_m_kk);
 
-              // call wetdep for computing....add mod=re descriptive comment here?
+              // call wetdep for computing....add mod=re descriptive comment
+              // here?
               mam4::AeroConfig wetdep_config;
-              /*auto atm = mam_coupling::atmosphere_for_column(dry_atm_,icol);
-              wetdep_.compute_tendencies1(wetdep_config,team,
+              // auto atm = mam_coupling::atmosphere_for_column(dry_atm_,icol);
+              /*wetdep_.compute_tendencies1(wetdep_config,team,
                           0, dt, atm);*/
-
-
             });  // klev parallel_for loop
       });        // icol parallel_for loop
-
-  
 
   /*
       call calc_sfc_flux(rprdsh(:ncol,:),  state%pdel(:ncol,:),

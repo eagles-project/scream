@@ -114,6 +114,10 @@ initial_conditions:
   dgnumwet: 1e-5 # wet aerosol diameter [m]
   fracis: 1e-5 # fraction of transported species that are insoluble [fraction]
 
+  cldfrac_tot: 0.5
+  pbl_height: 25.0
+  phis : 0.1
+
 
 # The parameters for I/O control
 Scorpio:

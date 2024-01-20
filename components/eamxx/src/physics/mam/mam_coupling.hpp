@@ -531,6 +531,8 @@ mam4::Prognostics aerosols_for_column(const AerosolState &dry_aero,
 // Given an AerosolState with views for dry aerosol quantities, creates a
 // interstitial aerosols 1D view (state_q) for the column with the given index. 
 // This object can be provided to mam4xx for the column.
+
+//MUST FIXME: address James comments about making the code better.
 KOKKOS_INLINE_FUNCTION
 void state_q_for_column_at_one_lev(const AerosolState &dry_aero,
                                    const int column_index, const int klev,
