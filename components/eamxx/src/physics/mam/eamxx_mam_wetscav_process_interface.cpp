@@ -1,10 +1,12 @@
 #include "physics/mam/eamxx_mam_wetscav_process_interface.hpp"
 
 // NOTE: see the impl/ directory for the contents of the impl namespace
+#include "impl/compute_particle_size.cpp"
+
+// Remove the following<<<< 
 #include <type_traits>
 #include <typeinfo>
-
-#include "impl/compute_particle_size.cpp"
+//>>>>>>>
 
 /*
 Future work:
@@ -34,6 +36,7 @@ void MAMWetscav::set_grids(
   // Nevertheless, for output reasons, we like to see 'kg/kg'.
   auto q_unit = kg / kg;
   q_unit.set_string("kg/kg");
+
   auto n_unit = 1 / kg;  // units of number mixing ratios of tracers
   n_unit.set_string("#/kg");
 
@@ -50,6 +53,8 @@ void MAMWetscav::set_grids(
   // interfaces
   const FieldLayout scalar3d_layout_mid{{COL, LEV}, {ncol_, nlev_}};
 
+  // Layout for 2D (2d horiz) variable defined at mid-level and
+  // interfaces
   const FieldLayout scalar2d_layout_mid{{COL}, {ncol_}};
 
   // -------------------------------------------------------------------------------------------------------------------------
@@ -67,7 +72,7 @@ void MAMWetscav::set_grids(
                       "tracers");  // ice cloud water [kg/kg] wet
 
   // -- Input variables that exists in PBUF in EAM
-  static constexpr auto nondim = Units::nondimensional();
+  static constexpr auto nondim = Units::nondimensional(); //for variables that are fractions etc.
 
   // MUST FIXME: cldt and cldn are the same variables. They must be their
   // previous step values.
@@ -171,24 +176,24 @@ void MAMWetscav::set_grids(
   // number (n) mixing ratios
   // -- NOTE: Interstitial aerosols are updated in the interface using the
   // "tendencies" from the wetscavenging process
-  for(int m = 0; m < mam_coupling::num_aero_modes(); ++m) {
+  for(int  imode= 0; imode < mam_coupling::num_aero_modes(); ++imode) {
     // interstitial aerosol tracers of interest: number (n) mixing ratios
-    const char *int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(m);
+    const char *int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(imode);
     add_field<Updated>(int_nmr_field_name, scalar3d_layout_mid, n_unit,
                        grid_name, "tracers");
 
     // cloudborne aerosol tracers of interest: number (n) mixing ratios
-    const char *cld_nmr_field_name = mam_coupling::cld_aero_nmr_field_name(m);
+    const char *cld_nmr_field_name = mam_coupling::cld_aero_nmr_field_name(imode);
 
     // NOTE: DO NOT add cld borne aerosols to the "tracer" group as these are
     // NOT advected
     add_field<Updated>(cld_nmr_field_name, scalar3d_layout_mid, n_unit,
                        grid_name);
 
-    for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
+    for(int ispec = 0; ispec < mam_coupling::num_aero_species(); ++ispec) {
       // (interstitial) aerosol tracers of interest: mass (q) mixing ratios
       const char *int_mmr_field_name =
-          mam_coupling::int_aero_mmr_field_name(m, a);
+          mam_coupling::int_aero_mmr_field_name(imode, ispec);
       if(strlen(int_mmr_field_name) > 0) {
         add_field<Updated>(int_mmr_field_name, scalar3d_layout_mid, q_unit,
                            grid_name, "tracers");
@@ -196,7 +201,7 @@ void MAMWetscav::set_grids(
 
       // (cloudborne) aerosol tracers of interest: mass (q) mixing ratios
       const char *cld_mmr_field_name =
-          mam_coupling::cld_aero_mmr_field_name(m, a);
+          mam_coupling::cld_aero_mmr_field_name(imode, ispec);
       if(strlen(cld_mmr_field_name) > 0) {
         // NOTE: DO NOT add cld borne aerosols to the "tracer" group as these
         // are NOT advected
@@ -206,20 +211,32 @@ void MAMWetscav::set_grids(
     }
   }
 
+  //The following fields are not needed by this process but we define them so
+  // that we can create MAM4xx class objects like atmosphere, prognostics etc.
   add_field<Required>("cldfrac_tot", scalar3d_layout_mid, nondim,
-                      grid_name);                                        //
-  add_field<Required>("pbl_height", scalar2d_layout_mid, m, grid_name);  //
-  add_field<Required>("phis", scalar2d_layout_mid, m, grid_name);        //
-  add_field<Required>("qv", scalar3d_layout_mid, m, grid_name);          //
-  add_field<Required>("nc", scalar3d_layout_mid, m, grid_name);          //
-  add_field<Required>("ni", scalar3d_layout_mid, m, grid_name);          //
-  add_field<Required>("omega", scalar3d_layout_mid, m, grid_name);       //
+                      grid_name);                                            // Cloud fraction
+  add_field<Required>("pbl_height", scalar2d_layout_mid, m,      grid_name); // PBL height
+
+  static constexpr auto s2 = s * s;
+  add_field<Required>("phis",       scalar2d_layout_mid, m2/s2,  grid_name); // surface geopotential
+  add_field<Required>("qv",         scalar3d_layout_mid, q_unit, grid_name); // specific humidity
+  add_field<Required>("nc",         scalar3d_layout_mid, n_unit, grid_name); // cloud water number conc
+  add_field<Required>("ni",         scalar3d_layout_mid, n_unit, grid_name); // cloud ice number conc
+  add_field<Required>("omega",      scalar3d_layout_mid, Pa/s,   grid_name); // vertical pressure velocity
+
 }
 
+// =========================================================================================
+// ON HOST, returns the number of bytes of device memory needed by the above
+// Buffer type given the number of columns and vertical levels
 size_t MAMWetscav::requested_buffer_size_in_bytes() const {
   return mam_coupling::buffer_size(ncol_, nlev_);
 }
 
+// =========================================================================================
+// ON HOST, initializeѕ the Buffer type with sufficient memory to store
+// intermediate (dry) quantities on the given number of columns with the given
+// number of vertical levels. Returns the number of bytes allocated.
 void MAMWetscav::init_buffers(const ATMBufferManager &buffer_manager) {
   EKAT_REQUIRE_MSG(
       buffer_manager.allocated_bytes() >= requested_buffer_size_in_bytes(),
@@ -270,40 +287,40 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   dry_atm_.z_surf = 0.0;  // FIXME: for now
 
   // set wet/dry aerosol state data (interstitial aerosols only)
-  for(int m = 0; m < mam_coupling::num_aero_modes(); ++m) {
-    const char *int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(m);
-    wet_aero_.int_aero_nmr[m] =
+  for(int imode = 0; imode < mam_coupling::num_aero_modes(); ++imode) {
+    const char *int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(imode);
+    wet_aero_.int_aero_nmr[imode] =
         get_field_out(int_nmr_field_name).get_view<Real **>();
 
-    const char *cld_nmr_field_name = mam_coupling::cld_aero_nmr_field_name(m);
-    wet_aero_.cld_aero_nmr[m] =
+    const char *cld_nmr_field_name = mam_coupling::cld_aero_nmr_field_name(imode);
+    wet_aero_.cld_aero_nmr[imode] =
         get_field_out(cld_nmr_field_name).get_view<Real **>();
-    // dry_aero_.int_aero_nmr[m] = buffer_.dry_int_aero_nmr[m];
+    // dry_aero_.int_aero_nmr[imode] = buffer_.dry_int_aero_nmr[imode];
     // MUST FIXME: We should compute dry mmr, not equate it to wet. This is
     // WRONG!!
-    dry_aero_.int_aero_nmr[m] = wet_aero_.int_aero_nmr[m];
-    dry_aero_.cld_aero_nmr[m] = wet_aero_.cld_aero_nmr[m];
-    for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
+    dry_aero_.int_aero_nmr[imode] = wet_aero_.int_aero_nmr[imode];
+    dry_aero_.cld_aero_nmr[imode] = wet_aero_.cld_aero_nmr[imode];
+    for(int ispec = 0; ispec < mam_coupling::num_aero_species(); ++ispec) {
       const char *int_mmr_field_name =
-          mam_coupling::int_aero_mmr_field_name(m, a);
+          mam_coupling::int_aero_mmr_field_name(imode, ispec);
       if(strlen(int_mmr_field_name) > 0) {
-        wet_aero_.int_aero_mmr[m][a] =
+        wet_aero_.int_aero_mmr[imode][ispec] =
             get_field_out(int_mmr_field_name).get_view<Real **>();
-        // dry_aero_.int_aero_mmr[m][a] = buffer_.dry_int_aero_mmr[m][a];
+        // dry_aero_.int_aero_mmr[imode][ispec] = buffer_.dry_int_aero_mmr[imode][ispec];
         // MUST FIXME: We should compute dry mmr, not equate it to wet. This is
         // WRONG!!
-        dry_aero_.int_aero_mmr[m][a] = wet_aero_.int_aero_mmr[m][a];
+        dry_aero_.int_aero_mmr[imode][ispec] = wet_aero_.int_aero_mmr[imode][ispec];
       }
 
       const char *cld_mmr_field_name =
-          mam_coupling::cld_aero_mmr_field_name(m, a);
+          mam_coupling::cld_aero_mmr_field_name(imode, ispec);
       if(strlen(cld_mmr_field_name) > 0) {
-        wet_aero_.cld_aero_mmr[m][a] =
+        wet_aero_.cld_aero_mmr[imode][ispec] =
             get_field_out(cld_mmr_field_name).get_view<Real **>();
-        // dry_aero_.cld_aero_mmr[m][a] = buffer_.dry_cld_aero_mmr[m][a];
+        // dry_aero_.cld_aero_mmr[imode][ispec] = buffer_.dry_cld_aero_mmr[imode][ispec];
         // MUST FIXME: We should compute dry mmr, not equate it to wet. This is
         // WRONG!!
-        dry_aero_.cld_aero_mmr[m][a] = wet_aero_.cld_aero_mmr[m][a];
+        dry_aero_.cld_aero_mmr[imode][ispec] = wet_aero_.cld_aero_mmr[imode][ispec];
       }
     }
   }
