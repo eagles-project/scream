@@ -303,25 +303,20 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
     const char *int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(imode);
     wet_aero_.int_aero_nmr[imode] =
         get_field_out(int_nmr_field_name).get_view<Real **>();
+    dry_aero_.int_aero_nmr[imode] = buffer_.dry_int_aero_nmr[imode];
 
     const char *cld_nmr_field_name = mam_coupling::cld_aero_nmr_field_name(imode);
     wet_aero_.cld_aero_nmr[imode] =
         get_field_out(cld_nmr_field_name).get_view<Real **>();
-    // dry_aero_.int_aero_nmr[imode] = buffer_.dry_int_aero_nmr[imode];
-    // MUST FIXME: We should compute dry mmr, not equate it to wet. This is
-    // WRONG!!
-    dry_aero_.int_aero_nmr[imode] = wet_aero_.int_aero_nmr[imode];
     dry_aero_.cld_aero_nmr[imode] = wet_aero_.cld_aero_nmr[imode];
+
     for(int ispec = 0; ispec < mam_coupling::num_aero_species(); ++ispec) {
       const char *int_mmr_field_name =
           mam_coupling::int_aero_mmr_field_name(imode, ispec);
       if(strlen(int_mmr_field_name) > 0) {
         wet_aero_.int_aero_mmr[imode][ispec] =
             get_field_out(int_mmr_field_name).get_view<Real **>();
-        // dry_aero_.int_aero_mmr[imode][ispec] = buffer_.dry_int_aero_mmr[imode][ispec];
-        // MUST FIXME: We should compute dry mmr, not equate it to wet. This is
-        // WRONG!!
-        dry_aero_.int_aero_mmr[imode][ispec] = wet_aero_.int_aero_mmr[imode][ispec];
+        dry_aero_.int_aero_mmr[imode][ispec] = buffer_.dry_int_aero_mmr[imode][ispec];
       }
 
       const char *cld_mmr_field_name =
@@ -329,15 +324,10 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
       if(strlen(cld_mmr_field_name) > 0) {
         wet_aero_.cld_aero_mmr[imode][ispec] =
             get_field_out(cld_mmr_field_name).get_view<Real **>();
-        // dry_aero_.cld_aero_mmr[imode][ispec] = buffer_.dry_cld_aero_mmr[imode][ispec];
-        // MUST FIXME: We should compute dry mmr, not equate it to wet. This is
-        // WRONG!!
-        dry_aero_.cld_aero_mmr[imode][ispec] = wet_aero_.cld_aero_mmr[imode][ispec];
+       dry_aero_.cld_aero_mmr[imode][ispec] = buffer_.dry_cld_aero_mmr[imode][ispec];
       }
     }
   }
-
-  
 
   // set up our preprocess/postprocess functors
   preprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_,
