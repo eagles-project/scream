@@ -83,11 +83,11 @@ class MAMWetscav : public scream::AtmosphereProcess {
                     const mam_coupling::AerosolState& wet_aero_in,
                     const mam_coupling::DryAtmosphere& dry_atm_in,
                     const mam_coupling::AerosolState& dry_aero_in) {
-      ncol_pre_ = ncol_in;
-      nlev_pre_ = nlev_in;
-      wet_atm_pre_ = wet_atm_in;
+      ncol_pre_     = ncol_in;
+      nlev_pre_     = nlev_in;
+      wet_atm_pre_  = wet_atm_in;
       wet_aero_pre_ = wet_aero_in;
-      dry_atm_pre_ = dry_atm_in;
+      dry_atm_pre_  = dry_atm_in;
       dry_aero_pre_ = dry_aero_in;
     }
 
@@ -99,7 +99,6 @@ class MAMWetscav : public scream::AtmosphereProcess {
       compute_vertical_layer_heights(team, dry_atm_pre_, i);
       team.team_barrier(); // allows kernels below to use layer heights
       compute_updraft_velocities(team, wet_atm_pre_, dry_atm_pre_, i);
-      //compute_dry_mixing_ratios(team, wet_atm_pre_, wet_aero_pre_, dry_aero_pre_, i);
       team.team_barrier();
     } // operator()
      

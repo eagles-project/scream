@@ -275,9 +275,11 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
 
   // How "buffer_" works: We use buffer to allocate memory for the members of 
   // dry_atm_ object. Here we are providing those memory locations to the dry_atm_
-  // members. These members are computed from the above wet_atm_ or dyr_atm_
-  // members that are explicitly getting their values either from the inout file
-  // or from other processes.
+  // members. These members are computed from the above wet_atm_ or dry_atm_
+  // members that are explicitly getting their values either from the input file
+  // or from other processes. These members are null at this point, they are 
+  // assigned "Kokkos::parallel_for("preprocess", scan_policy, preprocess_);"
+  // call in the run_impl 
 
   dry_atm_.qv        = buffer_.qv_dry;
   dry_atm_.qc        = buffer_.qc_dry;
@@ -289,12 +291,14 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   dry_atm_.z_iface   = buffer_.z_iface;
   dry_atm_.w_updraft = buffer_.w_updraft;
 
-  // The following variables  *may* not be used by the process but they are
+  // The following dry_atm_ members  *may* not be used by the process but they are
   // needed for creating MAM4xx class objects like Atmosphere
   dry_atm_.cldfrac = get_field_in("cldfrac_tot").get_view<const Real**>();
   dry_atm_.pblh    = get_field_in("pbl_height").get_view<const Real*>();
   dry_atm_.phis    = get_field_in("phis").get_view<const Real*>();
   dry_atm_.z_surf  = 0.0;  // MUST FIXME: for now
+  
+  //Other required variables
   cldn_prev_step_  = get_field_in("cldn_prev_step").get_view<const Real **>();
   // cldt_prev_step_ = get_field_in("cldt_prev_step").get_view<const Real **>();
   
@@ -330,31 +334,21 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   }
 
   // set up our preprocess/postprocess functors
+  // Here we initialize (not compute) objects in preprocess struct using the
+  // objects in the argument list
   preprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_,
                          dry_aero_);
-  // postprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_,
-  // dry_aero_);
 }
 
-/*Real calculate_vertical_velocity(
-      const Real &omega, const Real &density) {
-    
-
-    static constexpr auto g = 9.8;
-    return 1;  // return -omega/(density * g);
-  }*/
 
 // =========================================================================================
 void MAMWetscav::run_impl(const double dt) {
   
   const auto scan_policy = ekat::ExeSpaceUtils<
       KT::ExeSpace>::get_thread_range_parallel_scan_team_policy(ncol_, nlev_);
-  const auto policy =
-      ekat::ExeSpaceUtils<KT::ExeSpace>::get_default_team_policy(ncol_, nlev_);
 
-  
-
-  // preprocess input -- needs a scan for the calculation of atm height
+  // preprocess input -- needs a scan for the calculation of all variables
+  // needed by this process or setting up MAM4xx classes and their objects
   Kokkos::parallel_for("preprocess", scan_policy, preprocess_);
   Kokkos::fence();
 
@@ -434,6 +428,9 @@ void MAMWetscav::run_impl(const double dt) {
       "state_q", nlev_,
       nvars_);  // MUST FIXME: make it is 3d view to avoid race condition
   view_2d qqcw("qqcw", nlev_, nvars_);
+
+  const auto policy =
+      ekat::ExeSpaceUtils<KT::ExeSpace>::get_default_team_policy(ncol_, nlev_);
 
   // loop over atmosphere columns and compute aerosol particle size
   Kokkos::parallel_for(
