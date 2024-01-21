@@ -377,11 +377,12 @@ void MAMWetscav::run_impl(const double dt) {
    * be updated (update_mmr is TRUE by default)
    */
 
+  static constexpr int maxd_aspectype = mam4::ndrop::maxd_aspectype;
   int nspec_amode[ntot_amode_];
-  int lspectype_amode[mam4::ndrop::maxd_aspectype][ntot_amode_];
-  mam4::Real specdens_amode[mam4::ndrop::maxd_aspectype];
-  int lmassptr_amode[mam4::ndrop::maxd_aspectype][ntot_amode_];
-  Real spechygro[mam4::ndrop::maxd_aspectype];
+  int lspectype_amode[maxd_aspectype][ntot_amode_];
+  mam4::Real specdens_amode[maxd_aspectype];
+  int lmassptr_amode[maxd_aspectype][ntot_amode_];
+  Real spechygro[maxd_aspectype];
 
   int numptr_amode[ntot_amode_];
   int mam_idx[ntot_amode_][mam4::ndrop::nspec_max];
@@ -481,10 +482,10 @@ void MAMWetscav::run_impl(const double dt) {
               for(int imode = 0; imode < ntot_amode_; ++imode)
                 nspec_amode_tmp[imode] = nspec_amode[imode];
 
-              mam4::Real specdens_amode_tmp[mam4::ndrop::maxd_aspectype];
-              mam4::Real spechygro_tmp[mam4::ndrop::maxd_aspectype];
-              int lspectype_amode_tmp[mam4::ndrop::maxd_aspectype][ntot_amode_];
-              for(int ispectype = 0; ispectype < mam4::ndrop::maxd_aspectype;
+              mam4::Real specdens_amode_tmp[maxd_aspectype];
+              mam4::Real spechygro_tmp[maxd_aspectype];
+              int lspectype_amode_tmp[maxd_aspectype][ntot_amode_];
+              for(int ispectype = 0; ispectype < maxd_aspectype;
                   ispectype++) {
                 specdens_amode_tmp[ispectype] = specdens_amode[ispectype];
                 spechygro_tmp[ispectype]      = spechygro[ispectype];
@@ -503,7 +504,7 @@ void MAMWetscav::run_impl(const double dt) {
               // call wetdep for computing....add mod=re descriptive comment
               // here?
               mam4::AeroConfig wetdep_config;
-              // auto atm = mam_coupling::atmosphere_for_column(dry_atm_,icol);
+              auto atm = mam_coupling::atmosphere_for_column(dry_atm_,icol);
               /*wetdep_.compute_tendencies1(wetdep_config,team,
                           0, dt, atm);*/
             });  // klev parallel_for loop
