@@ -505,8 +505,9 @@ void MAMWetscav::run_impl(const double dt) {
               // here?
               mam4::AeroConfig wetdep_config;
               auto atm = mam_coupling::atmosphere_for_column(dry_atm_,icol);
+              const mam4::Surface sfc; // sfc object is NEVER used in wetdep process
               wetdep_.compute_tendencies1(wetdep_config,team,
-                          0, dt, atm);
+                          0, dt, atm, sfc);
             });  // klev parallel_for loop
       });        // icol parallel_for loop
 
