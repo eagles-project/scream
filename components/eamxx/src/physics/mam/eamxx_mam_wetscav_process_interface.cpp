@@ -505,8 +505,8 @@ void MAMWetscav::run_impl(const double dt) {
               // here?
               mam4::AeroConfig wetdep_config;
               auto atm = mam_coupling::atmosphere_for_column(dry_atm_,icol);
-              /*wetdep_.compute_tendencies1(wetdep_config,team,
-                          0, dt, atm);*/
+              wetdep_.compute_tendencies1(wetdep_config,team,
+                          0, dt, atm);
             });  // klev parallel_for loop
       });        // icol parallel_for loop
 
