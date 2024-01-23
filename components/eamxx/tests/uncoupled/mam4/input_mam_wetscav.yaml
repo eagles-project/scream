@@ -118,6 +118,13 @@ initial_conditions:
   pbl_height: 25.0
   phis : 0.1
 
+  aero_gas_mmr_o3: 1e-5
+  aero_gas_mmr_h2o2: 1e-5
+  aero_gas_mmr_h2so4: 1e-5
+  aero_gas_mmr_so2: 1e-5
+  aero_gas_mmr_dms: 1e-5
+  aero_gas_mmr_soag: 1e-5
+
 
 # The parameters for I/O control
 Scorpio:

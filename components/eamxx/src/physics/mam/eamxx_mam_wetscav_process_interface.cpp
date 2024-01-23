@@ -211,8 +211,19 @@ void MAMWetscav::set_grids(
     }
   }
 
+  // Tracers group -- do we need this in addition to the tracers above? In any
+  // case, this call should be idempotent, so it can't hurt.
+  add_group<Updated>("tracers", grid_name, 1, Bundling::Required);
+
   //The following fields are not needed by this process but we define them so
   // that we can create MAM4xx class objects like atmosphere, prognostics etc.
+
+  // aerosol-related gases: mass mixing ratios
+  for (int g = 0; g < mam_coupling::num_aero_gases(); ++g) {
+    const char* gas_mmr_field_name = mam_coupling::gas_mmr_field_name(g);
+    add_field<Updated>(gas_mmr_field_name, scalar3d_layout_mid, q_unit, grid_name, "tracers");
+  }
+
   add_field<Required>("cldfrac_tot", scalar3d_layout_mid, nondim,
                       grid_name);                                            // Cloud fraction
   add_field<Required>("pbl_height", scalar2d_layout_mid, m,      grid_name); // PBL height
@@ -297,6 +308,13 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   dry_atm_.pblh    = get_field_in("pbl_height").get_view<const Real*>();
   dry_atm_.phis    = get_field_in("phis").get_view<const Real*>();
   dry_atm_.z_surf  = 0.0;  // MUST FIXME: for now
+  // ---- set wet/dry aerosol-related gas state data
+  for (int g = 0; g < mam_coupling::num_aero_gases(); ++g) {
+    const char* mmr_field_name = mam_coupling::gas_mmr_field_name(g);
+    std::cout<<mmr_field_name<<std::endl;
+    wet_aero_.gas_mmr[g] = get_field_out(mmr_field_name).get_view<Real **>();
+    dry_aero_.gas_mmr[g] = buffer_.dry_gas_mmr[g];
+  }
   
   //Other required variables
   cldn_prev_step_  = get_field_in("cldn_prev_step").get_view<const Real **>();
@@ -376,7 +394,7 @@ void MAMWetscav::run_impl(const double dt) {
    *           2. Interstitial and cld borne aerosols (i.e. "tends") mmr will
    * be updated (update_mmr is TRUE by default)
    */
-
+  //MUST: FIXME: Make sure state is not updated...only tendencies should be updated!!
   static constexpr int maxd_aspectype = mam4::ndrop::maxd_aspectype;
   int nspec_amode[ntot_amode_];
   int lspectype_amode[maxd_aspectype][ntot_amode_];
@@ -508,8 +526,18 @@ void MAMWetscav::run_impl(const double dt) {
               
               // set surface state data
               const haero::Surface sfc{}; // sfc object is NEVER used in wetdep process
+
+              // fetch column-specific subviews into aerosol prognostics
+              mam4::Prognostics progs = mam_coupling::interstitial_aerosols_for_column(dry_aero_, icol);
+
+              // set up diagnostics
+              mam4::Diagnostics diags(nlev_);
+
+              // setup tendencies
+              mam4::Tendencies tends{};
+
               wetdep_.compute_tendencies1(wetdep_config,team,
-                          0, dt, atm, sfc);
+                          0, dt, atm, sfc, progs, diags, tends);
             });  // klev parallel_for loop
       });        // icol parallel_for loop
 
