@@ -38,6 +38,7 @@ class MAMWetscav : public scream::AtmosphereProcess {
   using view_2d = typename KT::template view_2d<Real>;
 
   using const_view_2d = typename KT::template view_2d<const Real>;
+  using const_view_1d = typename KT::template view_1d<const Real>; // remove it if possible
 
 
   // a thread team dispatched to a single vertical column
@@ -175,6 +176,10 @@ class MAMWetscav : public scream::AtmosphereProcess {
   mam_coupling::DryAtmosphere dry_atm_;
 
   const_view_2d cldn_prev_step_;//, cldt_prev_step_; // cloud fraction from the previous step, FIXME: they carry same info, we might remove one later
+  view_2d rprdsh_; // rain production, shallow convection [kg/kg/s]
+  view_2d rprddp_;
+  view_2d evapcsh_;
+  view_2d evapcdp_;
 
   // aerosol states
   mam_coupling::AerosolState  wet_aero_, dry_aero_;
