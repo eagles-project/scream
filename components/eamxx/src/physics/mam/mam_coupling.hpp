@@ -18,8 +18,10 @@ using KT            = ekat::KokkosTypes<ekat::DefaultDevice>;
 // views for single- and multi-column data
 using view_1d       = typename KT::template view_1d<Real>;
 using view_2d       = typename KT::template view_2d<Real>;
+using view_3d       = typename KT::template view_3d<Real>;
 using const_view_1d = typename KT::template view_1d<const Real>;
 using const_view_2d = typename KT::template view_2d<const Real>;
+using const_view_3d = typename KT::template view_3d<const Real>;
 
 // Kokkos thread team (league member)
 using Team = Kokkos::TeamPolicy<KT::ExeSpace>::member_type;
@@ -241,7 +243,7 @@ const char* cld_aero_mmr_field_name(const int mode, const int species) {
 // mixing ratio field in EAMxx ("aero_gas_mmr_<gas>")
 KOKKOS_INLINE_FUNCTION
 const char* gas_mmr_field_name(const int gas) {
-  if (!gas_mmr_names(gas)) {
+  if (!gas_mmr_names(gas)[0]) {
     concat_2_strings("aero_gas_mmr_", gas_species_name(gas), gas_mmr_names(gas));
   }
   return const_cast<const char*>(gas_mmr_names(gas));
