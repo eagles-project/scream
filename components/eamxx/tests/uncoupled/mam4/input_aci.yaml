@@ -29,6 +29,24 @@ initial_conditions:
   num_a1: 1.e5
   num_c1: 1.e5
   bc_a1: 1.e-5
+  qqcw: 1e5
+
+  aero_gas_mmr_o3: 0.0
+  aero_gas_mmr_h2o2: 0.0
+  aero_gas_mmr_h2so4: 0.0
+  aero_gas_mmr_so2: 0.0
+  aero_gas_mmr_dms: 0.0
+  aero_gas_mmr_soag: 0.0
+
+  hetfrz_immersion_nucleation_tend: 0
+  hetfrz_contact_nucleation_tend: 0
+  hetfrz_depostion_nucleation_tend: 0
+
+  zm: 1e1
+
+  w_updraft: 1e0
+  ptend: 1e0
+
   num_a2: 1e5
   num_a3: 1e5
   num_a4: 1e5
@@ -56,6 +74,27 @@ initial_conditions:
   bc_a4: 1e-5
   mom_a4: 1e-5
   #cloud borne aerosols
+  qi_coarse_dst: 1e-5
+  qi_coarse_nacl: 1e-5
+  qi_coarse_so4: 1e-5
+  qi_coarse_mom: 1e-5
+  qi_coarse_bc: 1e-5
+  qi_coarse_pom: 1e-5
+  qi_coarse_soa: 1e-5
+  ni_accum: 1e-5
+  ni_coarse: 1e-5
+  ni_aitken:  1e-5
+
+  state_q: 1e-5
+  ncldwtr: 1e-12
+
+  icenuc_num_hetfrz: 1e3
+  icenuc_num_immfrz: 1e3
+  icenuc_num_depnuc: 1e3
+  icenuc_num_meydep: 1e3
+  num_act_aerosol_ice_nucle_hom: 1e3
+  num_act_aerosol_ice_nucle: 1e3
+
   soa_c1: 1e-5
   so4_c1: 1e-5
   pom_c1: 1e-5
