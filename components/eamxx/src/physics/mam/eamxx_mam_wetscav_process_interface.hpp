@@ -175,12 +175,21 @@ class MAMWetscav : public scream::AtmosphereProcess {
   mam_coupling::WetAtmosphere wet_atm_;
   mam_coupling::DryAtmosphere dry_atm_;
 
-  const_view_2d cldn_prev_step_;//, cldt_prev_step_; // cloud fraction from the previous step, FIXME: they carry same info, we might remove one later
-  view_2d rprdsh_; // rain production, shallow convection [kg/kg/s]
-  view_2d rprddp_;
-  view_2d evapcsh_;
-  view_2d evapcdp_;
+  view_2d cldn_prev_step_, cldt_prev_step_; // cloud fraction from the previous step, FIXME: they carry same info, we might remove one later
 
+
+  view_2d rprdsh_; // rain production, shallow convection [kg/kg/s]
+  view_2d evapcsh_;
+  view_2d sh_frac_;
+  view_2d icwmrsh_;
+
+  view_2d rprddp_;
+  view_2d evapcdp_;
+  view_2d dp_frac_;
+  view_2d icwmrdp_;
+  
+
+  
   // aerosol states
   mam_coupling::AerosolState  wet_aero_, dry_aero_;
 
