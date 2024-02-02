@@ -88,6 +88,7 @@ initial_conditions:
   mom_c4: 1e-5
 
   cldt_prev_step: 1e-5
+  cldst: 1e-5
   qme: 1e-5 
   prain: 1e-5
   evapr: 1e-5

@@ -79,6 +79,8 @@ void MAMWetscav::set_grids(
   // previous step values.
   add_field<Updated>("cldn_prev_step", scalar3d_layout_mid, nondim,
                       grid_name);  // layer cloud fraction [fraction]
+  add_field<Updated>("cldst", scalar3d_layout_mid, nondim,
+                      grid_name); //??
   add_field<Updated>("rprdsh", scalar3d_layout_mid, kg / kg / s,
                      grid_name);  // rain production, shallow convection
                                   // [kg/kg/s] //NOT updated
@@ -334,6 +336,8 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   // Other required variables
   cldn_prev_step_ = get_field_out("cldn_prev_step").get_view< Real **>();
   cldt_prev_step_ = get_field_out("cldt_prev_step").get_view< Real **>(); //FIXME: Is it same as cldn_prev_step??
+  cldst_ = get_field_out("cldst").get_view< Real **>();//??
+  evapr_ = get_field_out("evapr").get_view< Real **>();
   rprdsh_ =
       get_field_out("rprdsh").get_view<Real **>();  // rain production, shallow
                                                     // convection [kg/kg/s]
@@ -604,11 +608,9 @@ void MAMWetscav::run_impl(const double dt) {
 
         diags.deep_convective_cloud_fraction       = zeros_nlev;
         diags.shallow_convective_cloud_fraction    = ekat::subview(cldt_prev_step_, icol); 
-        /*diags.stratiform_cloud_fraction =
-        ekat::subview(cldst_, icol); diags.evaporation_of_falling_precipitation
-        = ekat::subview(evapr_, icol); 
+        diags.stratiform_cloud_fraction =        ekat::subview(cldst_, icol);
+        diags.evaporation_of_falling_precipitation = ekat::subview(evapr_, icol); 
          
-        */
 
         diags.deep_convective_precipitation_production =
             ekat::subview(rprddp_, icol);
