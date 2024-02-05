@@ -521,6 +521,7 @@ haero::Atmosphere atmosphere_for_column(const DryAtmosphere& dry_atm,
                            ekat::subview(dry_atm.qi, column_index),
                            ekat::subview(dry_atm.ni, column_index),
                            ekat::subview(dry_atm.z_mid, column_index),
+                           ekat::subview(dry_atm.p_del, column_index), // FIXME: this should be pmid!
                            ekat::subview(dry_atm.p_del, column_index),
                            ekat::subview(dry_atm.cldfrac, column_index),
                            ekat::subview(dry_atm.w_updraft, column_index),
