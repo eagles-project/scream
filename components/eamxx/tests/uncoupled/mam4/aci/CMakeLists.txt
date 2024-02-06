@@ -1,11 +1,10 @@
 include (ScreamUtils)
 
-# This test needs to be reworked for microphysics -- currently it's still using
-# input for nucleation.
+
 
 # Create the test
-CreateADUnitTest(mam4_microphysics_standalone
-  LABELS mam4 physics
+CreateADUnitTest(mam4_aci_standalone
+  LABELS mam4 aci physics driver
   LIBS mam
   MPI_RANKS ${TEST_RANK_START} ${TEST_RANK_END}
 )
