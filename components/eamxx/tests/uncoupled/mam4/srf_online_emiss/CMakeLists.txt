@@ -1,11 +1,7 @@
 include (ScreamUtils)
 
-# This test needs to be reworked for microphysics -- currently it's still using
-# input for nucleation.
-
 # Create the test
-CreateADUnitTest(mam4_microphysics_standalone
-  LABELS mam4 physics
+CreateADUnitTest(mam4_srf_online_emiss
   LIBS mam
   MPI_RANKS ${TEST_RANK_START} ${TEST_RANK_END}
 )
@@ -22,4 +18,4 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/output.yaml
                ${CMAKE_CURRENT_BINARY_DIR}/output.yaml)
 
 # Ensure test input files are present in the data dir
-GetInputFile(scream/init/${EAMxx_tests_IC_FILE_72lev})
+GetInputFile(scream/init/${EAMxx_tests_IC_FILE_MAM})
