@@ -81,12 +81,13 @@ void SHOCMacrophysics::set_grids(const std::shared_ptr<const GridsManager> grids
   add_field<Required>("phis",           scalar2d_layout_col, m2/s2, grid_name, ps);
 
   // Input/Output variables
-  add_field<Updated>("tke",           scalar3d_layout_mid, m2/s2,   grid_name, "tracers", ps);
-  add_field<Updated>("horiz_winds",   horiz_wind_layout,   m/s,     grid_name, ps);
-  add_field<Updated>("sgs_buoy_flux", scalar3d_layout_mid, K*(m/s), grid_name, ps);
-  add_field<Updated>("eddy_diff_mom", scalar3d_layout_mid, m2/s,    grid_name, ps);
-  add_field<Updated>("qc",            scalar3d_layout_mid, Qunit,   grid_name, "tracers", ps);
-  add_field<Updated>("cldfrac_liq",   scalar3d_layout_mid, nondim,  grid_name, ps);
+  add_field<Updated>("tke",            scalar3d_layout_mid, m2/s2,   grid_name, "tracers", ps);
+  add_field<Updated>("horiz_winds",    horiz_wind_layout,   m/s,     grid_name, ps);
+  add_field<Updated>("sgs_buoy_flux",  scalar3d_layout_mid, K*(m/s), grid_name, ps);
+  add_field<Updated>("eddy_diff_mom",  scalar3d_layout_mid, m2/s,    grid_name, ps);
+  add_field<Updated>("eddy_diff_heat", scalar3d_layout_mid, m2/s,    grid_name, ps);
+  add_field<Updated>("qc",             scalar3d_layout_mid, Qunit,   grid_name, "tracers", ps);
+  add_field<Updated>("cldfrac_liq",    scalar3d_layout_mid, nondim,  grid_name, ps);
 
   // Output variables
   add_field<Computed>("pbl_height",    scalar2d_layout_col, m,           grid_name);
@@ -258,6 +259,7 @@ void SHOCMacrophysics::initialize_impl (const RunType run_type)
   const auto& cldfrac_liq         = get_field_out("cldfrac_liq").get_view<Spack**>();
   const auto& sgs_buoy_flux       = get_field_out("sgs_buoy_flux").get_view<Spack**>();
   const auto& tk                  = get_field_out("eddy_diff_mom").get_view<Spack**>();
+  const auto& tkh                 = get_field_out("eddy_diff_heat").get_view<Spack**>();
   const auto& inv_qc_relvar       = get_field_out("inv_qc_relvar").get_view<Spack**>();
   const auto& phis                = get_field_in("phis").get_view<const Real*>();
 
@@ -291,6 +293,7 @@ void SHOCMacrophysics::initialize_impl (const RunType run_type)
   if (run_type==RunType::Initial){
     Kokkos::deep_copy(sgs_buoy_flux,0.0);
     Kokkos::deep_copy(tk,0.0);
+    Kokkos::deep_copy(tkh,0.0);
     Kokkos::deep_copy(tke,0.0004);
     Kokkos::deep_copy(tke_copy,0.0004);
     Kokkos::deep_copy(cldfrac_liq,0.0);
@@ -327,6 +330,7 @@ void SHOCMacrophysics::initialize_impl (const RunType run_type)
   input_output.wthv_sec     = sgs_buoy_flux;
   input_output.qtracers     = shoc_preprocess.qtracers;
   input_output.tk           = tk;
+  input_output.tkh          = tkh;
   input_output.shoc_cldfrac = cldfrac_liq;
   input_output.shoc_ql      = qc_copy;
 
