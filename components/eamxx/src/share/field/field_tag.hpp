@@ -42,6 +42,8 @@ enum class FieldTag {
   IsccpTau,
   IsccpPrs,
   num_modes,
+  num_constituents,
+  psat,
   //
   nrefindex_real,
   nrefindex_im,
@@ -72,6 +74,8 @@ namespace ShortFieldTagsNames {
   constexpr auto ISCCPTAU = FieldTag::IsccpTau;
   constexpr auto ISCCPPRS = FieldTag::IsccpPrs;
   constexpr auto NMODES = FieldTag::num_modes;
+  constexpr auto MAM_NCNST = FieldTag::num_constituents;
+  constexpr auto MAM_PSAT = FieldTag::psat;
   //
   constexpr auto NREFINDEX_REAL = FieldTag::nrefindex_real;
   constexpr auto NREFINDEX_IM = FieldTag::nrefindex_im;
@@ -132,6 +136,12 @@ inline std::string e2str (const FieldTag ft) {
       break;
     case FieldTag::num_modes:
       name = "num_modes";
+      break;
+    case FieldTag::num_constituents:
+      name = "num_constituents";
+      break;
+    case FieldTag::psat:
+      name = "psat";
       break;
     case FieldTag::nrefindex_real:
       name = "refindex_real";
