@@ -637,6 +637,17 @@ struct Functions
     Spack& qr2qi_immers_freeze_tend, Spack& nr2ni_immers_freeze_tend,
     const Smask& context = Smask(true) );
 
+  // 
+  KOKKOS_FUNCTION
+  static void CNT_couple(const Spack& frzimm, const Spack& frzcnt,
+    const Spack& frzdep, const Spack& rho,
+    const Spack& qc_incld, const Spack& nc_incld,
+    const int Iflag,
+    Spack& ncheti_cnt, Spack& qcheti_cnt,
+    Spack& nicnt, Spack& qucnt,
+    Spack& ninuc_cnt, Spack& qinuc_cnt,
+    Spack& ncheti_cn, Spack& qcheti_cnt);
+ 
   // Computes droplet self collection
   KOKKOS_FUNCTION
   static void droplet_self_collection(const Spack& rho, const Spack& inv_rho,
