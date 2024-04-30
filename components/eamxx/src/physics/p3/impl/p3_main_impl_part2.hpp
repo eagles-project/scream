@@ -23,6 +23,7 @@ void Functions<S,D>
   const Int& nk_pack,
   const bool& predictNc,
   const bool& do_prescribed_CCN,
+  const bool& use_hetfrz_classnuc,
   const Scalar& dt,
   const Scalar& inv_dt,
   const view_dnu_table& dnu,
@@ -306,10 +307,27 @@ void Functions<S,D>
         T_atm(k), rhofaci(k), table_val_qi_fallspd, acn(k), lamc(k), mu_c(k), qc_incld(k), qc2qi_collect_tend,
         vtrmi1, rho_qm_cloud, not_skip_micro);
 
-      // contact and immersion freezing droplets
-      cldliq_immersion_freezing(
-        T_atm(k), lamc(k), mu_c(k), cdist1(k), qc_incld(k), inv_qc_relvar(k),
-        qc2qi_hetero_freeze_tend, nc2ni_immers_freeze_tend, not_skip_micro);
+      if (!use_hetfrz_classnuc) {
+        // contact and immersion freezing droplets
+        cldliq_immersion_freezing(
+          T_atm(k), lamc(k), mu_c(k), cdist1(k), qc_incld(k), inv_qc_relvar(k),
+          qc2qi_hetero_freeze_tend, nc2ni_immers_freeze_tend, not_skip_micro);
+      } else {
+	Spack ncheti_cnt = 0, qcheti_cnt = 0;
+	Spack nicnt = 0, qicnt = 0;
+	Spack ninuc_cnt = 0, qinuc_cnt = 0;
+        const int Iflag_1 = 1;  // cloud droplet immersion freezing
+        const int Iflag_2 = 2;  // deposition freezing / contact freezing
+
+        CNT_couple(
+  	  nc2ni_immers_freeze_tend, qc2qr_ice_shed_tend, qv2qi_nucleat_tend,
+  	  rho(k), qc_incld(k), nc_incld(k), Iflag_1, ncheti_cnt, qcheti_cnt,
+	  nicnt, qicnt, ninuc_cnt, qinuc_cnt);
+        CNT_couple(
+	  nc2ni_immers_freeze_tend, qc2qr_ice_shed_tend, qv2qi_nucleat_tend,
+	  rho(k), qc_incld(k), nc_incld(k), Iflag_2, ncheti_cnt, qcheti_cnt,
+	  nicnt, qicnt, ninuc_cnt, qinuc_cnt);
+      }
 
       // for future: get rid of log statements below for rain freezing
       rain_immersion_freezing(

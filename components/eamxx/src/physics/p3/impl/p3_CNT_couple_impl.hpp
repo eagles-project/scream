@@ -18,9 +18,8 @@ void Functions<S,D>
   const Spack& qc_incld, const Spack& nc_incld,
   const int Iflag,
   Spack& ncheti_cnt, Spack& qcheti_cnt,
-  Spack& nicnt, Spack& qucnt,
-  Spack& ninuc_cnt, Spack& qinuc_cnt,
-  Spack& ncheti_cn, Spack& qcheti_cnt)
+  Spack& nicnt, Spack& qicnt,
+  Spack& ninuc_cnt, Spack& qinuc_cnt)
 {
   constexpr Scalar pi       = C::Pi;
   constexpr Scalar rho_h2o  = C::RHO_H2O;
@@ -28,35 +27,25 @@ void Functions<S,D>
   constexpr Scalar piov3    = pi/3.0;
   constexpr Scalar  mi0     = 4.0*piov3*900.0*1.0e-18; // BAD_CONSTANT!
  
+  const Spack Zero(0.0);
   // minimum mass of new crystal due to freezing of cloud droplets done
   // externally (kg)
  
-  const Spack mi0l_min = (4.0/3.0)*pi*rho_h2o*ekat::cube(4.0e-6);
+  const Scalar mi0l_min = (4.0/3.0)*pi*rho_h2o*(4.0e-6)*(4.0e-6)*(4.0e-6);
   Spack mi0l = qc_incld/ekat::max(nc_incld,1.0e6/rho);
   mi0l = ekat::max(mi0l_min, mi0l);
   
+  const auto mask = qc_incld > qsmall;
   switch (Iflag) {
     case 1:  // cloud droplet immersion freezing
-      if (qc_incld > qsmall) { 
-          ncheti_cnt = frzimm*1.0e6/rho // frzimm input is in [#/cm3]
-          qcheti_cnt = ncheti_cnt*mi0l;
-      } else {
-          ncheti_cnt = 0.0;
-          qcheti_cnt = 0.0;
-      }
+      ncheti_cnt.set(mask, frzimm*1.0e6/rho /* frzimm input is in [#/cm3] */ , Zero);
+      qcheti_cnt.set(mask, ncheti_cnt*mi0l, Zero);
       break;
     case 2:  // deposition freezing / contact freezing
-      if(qc_incld > qsmall) {
-          nicnt = frzcnt*1.0e6/rho;
-          qicnt = nicnt*mi0l;
-          ninuc_cnt = frzdep*1.0e6/rho;
-          qinuc_cnt = ninuc_cnt*mi0;
-      } else {
-          nicnt = 0.0;
-          qicnt = 0.0;
-          ninuc_cnt = 0.0;
-          qinuc_cnt = 0.0;
-      }
+      nicnt.set(mask, frzcnt*1.0e6/rho, Zero);
+      qicnt.set(mask, nicnt*mi0l, Zero);
+      ninuc_cnt.set(mask, frzdep*1.0e6/rho, Zero);
+      qinuc_cnt.set(mask, ninuc_cnt*mi0, Zero);
       break;
     default:
       break;

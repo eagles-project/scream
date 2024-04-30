@@ -1772,8 +1772,9 @@ void p3_main_part2_f(
   auto policy = ekat::ExeSpaceUtils<ExeSpace>::get_default_team_policy(1, nk_pack);
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const MemberType& team) {
 
+    const bool use_hetfrz_classnuc  = false;
     P3F::p3_main_part2(
-      team, nk_pack, do_predict_nc, do_prescribed_CCN, dt, inv_dt, dnu, ice_table_vals, collect_table_vals, revap_table_vals,
+      team, nk_pack, do_predict_nc, do_prescribed_CCN, use_hetfrz_classnuc, dt, inv_dt, dnu, ice_table_vals, collect_table_vals, revap_table_vals,
       pres_d, dpres_d, dz_d, nc_nuceat_tend_d, inv_exner_d, exner_d, inv_cld_frac_l_d,
       inv_cld_frac_i_d, inv_cld_frac_r_d, ni_activated_d, inv_qc_relvar_d, cld_frac_i_d, cld_frac_l_d, cld_frac_r_d,
       qv_prev_d, t_prev_d, t_d, rho_d, inv_rho_d, qv_sat_l_d, qv_sat_i_d, qv_supersat_i_d, rhofacr_d, rhofaci_d, acn_d,
