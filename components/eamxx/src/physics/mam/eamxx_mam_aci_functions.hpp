@@ -9,30 +9,6 @@ namespace scream {
 
 namespace {
 
-KOKKOS_INLINE_FUNCTION
-void compute_w0_and_rho(const haero::ThreadTeam &team,
-                        const MAMAci::const_view_2d omega,
-                        const MAMAci::const_view_2d T_mid,
-                        const MAMAci::const_view_2d p_mid, const int icol,
-                        const int top_lev, const int nlev,
-                        // output
-                        MAMAci::view_2d w0, MAMAci::view_2d rho) {
-  // Get physical constants
-  using C                      = physics::Constants<Real>;
-  static constexpr auto gravit = C::gravit;  // Gravity [m/s2]
-  // Gas constant for dry air [J/(kg*K) or J/Kg/K]
-  static constexpr auto rair = C::Rair;
-  Kokkos::parallel_for(
-      Kokkos::TeamVectorRange(team, 0u, top_lev), KOKKOS_LAMBDA(int kk) {
-        w0(icol, kk)  = 0;
-        rho(icol, kk) = -999.0;
-      });
-  Kokkos::parallel_for(
-      Kokkos::TeamVectorRange(team, top_lev, nlev), KOKKOS_LAMBDA(int kk) {
-        rho(icol, kk) = p_mid(icol, kk) / (rair * T_mid(icol, kk));
-        w0(icol, kk)  = -1.0 * omega(icol, kk) / (rho(icol, kk) * gravit);
-      });
-}
 void compute_w0_and_rho(haero::ThreadTeamPolicy team_policy,
                         const mam_coupling::DryAtmosphere &dry_atmosphere,
                         const int top_lev, const int nlev,
@@ -44,9 +20,21 @@ void compute_w0_and_rho(haero::ThreadTeamPolicy team_policy,
   Kokkos::parallel_for(
       team_policy, KOKKOS_LAMBDA(const haero::ThreadTeam &team) {
         const int icol = team.league_rank();
-        compute_w0_and_rho(team, omega, T_mid, p_mid, icol, top_lev, nlev,
-                           // output
-                           w0, rho);
+        // Get physical constants
+        using C                      = physics::Constants<Real>;
+        static constexpr auto gravit = C::gravit;  // Gravity [m/s2]
+        // Gas constant for dry air [J/(kg*K) or J/Kg/K]
+        static constexpr auto rair = C::Rair;
+        Kokkos::parallel_for(
+            Kokkos::TeamVectorRange(team, 0u, top_lev), [&](int kk) {
+              w0(icol, kk)  = 0;
+              rho(icol, kk) = -999.0;
+            });
+        Kokkos::parallel_for(
+            Kokkos::TeamVectorRange(team, top_lev, nlev), [&](int kk) {
+              rho(icol, kk) = p_mid(icol, kk) / (rair * T_mid(icol, kk));
+              w0(icol, kk)  = -1.0 * omega(icol, kk) / (rho(icol, kk) * gravit);
+            });
       });
 }
 
@@ -73,16 +61,6 @@ void compute_values_at_interfaces(haero::ThreadTeamPolicy team_policy,
       });
 }
 
-KOKKOS_INLINE_FUNCTION
-void compute_tke_using_w_sec(const haero::ThreadTeam &team,
-                             const MAMAci::const_view_2d w_sec, const int icol,
-                             const int nlev,
-                             // output
-                             MAMAci::view_2d tke) {
-  Kokkos::parallel_for(
-      Kokkos::TeamVectorRange(team, 0u, nlev + 1),
-      KOKKOS_LAMBDA(int kk) { tke(icol, kk) = (3.0 / 2.0) * w_sec(icol, kk); });
-}
 void compute_tke_using_w_sec(haero::ThreadTeamPolicy team_policy,
                              const MAMAci::const_view_2d w_sec, const int nlev,
                              // output
@@ -90,34 +68,11 @@ void compute_tke_using_w_sec(haero::ThreadTeamPolicy team_policy,
   Kokkos::parallel_for(
       team_policy, KOKKOS_LAMBDA(const haero::ThreadTeam &team) {
         const int icol = team.league_rank();
-        compute_tke_using_w_sec(team, w_sec, icol, nlev,
-                                // output
-                                tke);
-      });
-}
-KOKKOS_INLINE_FUNCTION
-void compute_subgrid_scale_velocities(
-    const haero::ThreadTeam &team, const MAMAci::const_view_2d tke,
-    const Real wsubmin, const int icol, const int top_lev, const int nlev,
-    // output
-    MAMAci::view_2d wsub, MAMAci::view_2d wsubice, MAMAci::view_2d wsig) {
-  // More refined computation of sub-grid vertical velocity
-  // Set to be zero at the surface by initialization.
-  Kokkos::parallel_for(
-      Kokkos::TeamVectorRange(team, 0u, top_lev), KOKKOS_LAMBDA(int kk) {
-        wsub(icol, kk)    = wsubmin;
-        wsubice(icol, kk) = 0.001;
-        wsig(icol, kk)    = 0.001;
-      });
-  Kokkos::parallel_for(
-      Kokkos::TeamVectorRange(team, top_lev, nlev), KOKKOS_LAMBDA(int kk) {
-        wsub(icol, kk) = haero::sqrt(0.5 * (tke(icol, kk) + tke(icol, kk + 1)) *
-                                     (2.0 / 3.0));
-        wsig(icol, kk) =
-            mam4::utils::min_max_bound(0.001, 10.0, wsub(icol, kk));
-        wsubice(icol, kk) =
-            mam4::utils::min_max_bound(0.2, 10.0, wsub(icol, kk));
-        wsub(icol, kk) = haero::max(wsubmin, wsub(icol, kk));
+        Kokkos::parallel_for(
+            Kokkos::TeamVectorRange(team, 0u, nlev + 1),
+            [&](int kk) { 
+	      tke(icol, kk) = (3.0 / 2.0) * w_sec(icol, kk); 
+	});
       });
 }
 void compute_subgrid_scale_velocities(
@@ -128,11 +83,25 @@ void compute_subgrid_scale_velocities(
   Kokkos::parallel_for(
       team_policy, KOKKOS_LAMBDA(const haero::ThreadTeam &team) {
         const int icol = team.league_rank();
-        compute_subgrid_scale_velocities(team, tke, wsubmin, icol, top_lev,
-                                         nlev,
-                                         // output
-                                         wsub, wsubice, wsig);
-      });
+        // More refined computation of sub-grid vertical velocity
+        // Set to be zero at the surface by initialization.
+        Kokkos::parallel_for(
+            Kokkos::TeamVectorRange(team, 0u, top_lev), [&](int kk) {
+              wsub(icol, kk)    = wsubmin;
+              wsubice(icol, kk) = 0.001;
+              wsig(icol, kk)    = 0.001;
+            });
+        Kokkos::parallel_for(
+            Kokkos::TeamVectorRange(team, top_lev, nlev), [&](int kk) {
+              wsub(icol, kk) = haero::sqrt(0.5 * (tke(icol, kk) + tke(icol, kk + 1)) *
+                                           (2.0 / 3.0));
+              wsig(icol, kk) =
+                  mam4::utils::min_max_bound(0.001, 10.0, wsub(icol, kk));
+              wsubice(icol, kk) =
+                  mam4::utils::min_max_bound(0.2, 10.0, wsub(icol, kk));
+              wsub(icol, kk) = haero::max(wsubmin, wsub(icol, kk));
+            });
+  });
 }
 
 void compute_nucleate_ice_tendencies(
@@ -204,31 +173,6 @@ void compute_nucleate_ice_tendencies(
                                         surf, progs, diags, tends);
       });
 }
-KOKKOS_INLINE_FUNCTION
-void store_liquid_cloud_fraction(
-    const haero::ThreadTeam &team, const MAMAci::const_view_2d qc,
-    const MAMAci::const_view_2d qi, const MAMAci::const_view_2d liqcldf,
-    const MAMAci::const_view_2d liqcldf_prev, const int icol, const int top_lev,
-    const int nlev,
-    // output
-    MAMAci::view_2d cloud_frac, MAMAci::view_2d cloud_frac_prev) {
-  //-------------------------------------------------------------
-  // Get old and new liquid cloud fractions when amount of cloud
-  // is above qsmall threshold value
-  //-------------------------------------------------------------
-  // cut-off for cloud amount (ice or liquid)
-  static constexpr auto qsmall = 1e-18;
-  Kokkos::parallel_for(
-      Kokkos::TeamVectorRange(team, top_lev, nlev), KOKKOS_LAMBDA(int kk) {
-        if((qc(icol, kk) + qi(icol, kk)) > qsmall) {
-          cloud_frac(icol, kk)      = liqcldf(icol, kk);
-          cloud_frac_prev(icol, kk) = liqcldf_prev(icol, kk);
-        } else {
-          cloud_frac(icol, kk)      = 0;
-          cloud_frac_prev(icol, kk) = 0;
-        }
-      });
-}
 void store_liquid_cloud_fraction(
     haero::ThreadTeamPolicy team_policy,
     const mam_coupling::DryAtmosphere &dry_atmosphere,
@@ -241,25 +185,25 @@ void store_liquid_cloud_fraction(
   Kokkos::parallel_for(
       team_policy, KOKKOS_LAMBDA(const haero::ThreadTeam &team) {
         const int icol = team.league_rank();
-        store_liquid_cloud_fraction(team, qc, qi, liqcldf, liqcldf_prev, icol,
-                                    top_lev, nlev,
-                                    // output
-                                    cloud_frac, cloud_frac_prev);
+        //-------------------------------------------------------------
+        // Get old and new liquid cloud fractions when amount of cloud
+        // is above qsmall threshold value
+        //-------------------------------------------------------------
+        // cut-off for cloud amount (ice or liquid)
+        static constexpr auto qsmall = 1e-18; // BAD_CONSTANT
+        Kokkos::parallel_for(
+            Kokkos::TeamVectorRange(team, top_lev, nlev), [&](int kk) {
+              if((qc(icol, kk) + qi(icol, kk)) > qsmall) {
+                cloud_frac(icol, kk)      = liqcldf(icol, kk);
+                cloud_frac_prev(icol, kk) = liqcldf_prev(icol, kk);
+              } else {
+                cloud_frac(icol, kk)      = 0;
+                cloud_frac_prev(icol, kk) = 0;
+              }
+            });
       });
 }
-KOKKOS_INLINE_FUNCTION
-void compute_recipical_pseudo_density(const haero::ThreadTeam &team,
-                                      const MAMAci::const_view_2d pdel,
-                                      const int icol, const int nlev,
-                                      // output
-                                      MAMAci::view_2d rpdel) {
-  Kokkos::parallel_for(
-      Kokkos::TeamVectorRange(team, 0u, nlev), KOKKOS_LAMBDA(int kk) {
-        EKAT_KERNEL_ASSERT_MSG(0 < pdel(icol, kk),
-                               "Error: pdel should be > 0.\n");
-        rpdel(icol, kk) = 1 / pdel(icol, kk);
-      });
-}
+
 void compute_recipical_pseudo_density(haero::ThreadTeamPolicy team_policy,
                                       MAMAci::const_view_2d pdel,
                                       const int nlev,
@@ -268,9 +212,12 @@ void compute_recipical_pseudo_density(haero::ThreadTeamPolicy team_policy,
   Kokkos::parallel_for(
       team_policy, KOKKOS_LAMBDA(const haero::ThreadTeam &team) {
         const int icol = team.league_rank();
-        compute_recipical_pseudo_density(team, pdel, icol, nlev,
-                                         // output
-                                         rpdel);
+        Kokkos::parallel_for(
+            Kokkos::TeamVectorRange(team, 0, nlev), [&](int kk) {
+              EKAT_KERNEL_ASSERT_MSG(0 < pdel(icol, kk),
+                                     "Error: pdel should be > 0.\n");
+              rpdel(icol, kk) = 1 / pdel(icol, kk);
+            });
       });
 }
 
@@ -518,19 +465,6 @@ void update_cloud_borne_aerosols(
   }
 }
 
-// Update interstitial aerosols using tendencies - levels
-KOKKOS_INLINE_FUNCTION
-void update_interstitial_aerosols_levs(const haero::ThreadTeam &team,
-                                       const int nlev, const int icol,
-                                       const Real dt,
-                                       const MAMAci::view_2d ptend_view,
-                                       // output
-                                       MAMAci::view_2d aero_mr) {
-  Kokkos::parallel_for(Kokkos::TeamVectorRange(team, nlev), [&](int kk) {
-    aero_mr(icol, kk) += ptend_view(icol, kk) * dt;
-  });
-}
-
 // Update interstitial aerosols using tendencies- cols and levs
 void update_interstitial_aerosols(
     haero::ThreadTeamPolicy team_policy,
@@ -553,10 +487,9 @@ void update_interstitial_aerosols(
             team_policy, KOKKOS_LAMBDA(const haero::ThreadTeam &team) {
               const int icol = team.league_rank();
               // update values for all levs at this column
-              update_interstitial_aerosols_levs(team, nlev, icol, dt,
-                                                ptend_view,
-                                                // output
-                                                aero_mmr);
+              Kokkos::parallel_for(Kokkos::TeamVectorRange(team, nlev), [&](int kk) {
+                aero_mmr(icol, kk) += ptend_view(icol, kk) * dt;
+              });
             });
         // update index for the next species (only if aero_mmr.data() is True)
         ++s_idx;
@@ -569,9 +502,9 @@ void update_interstitial_aerosols(
         team_policy, KOKKOS_LAMBDA(const haero::ThreadTeam &team) {
           const int icol = team.league_rank();
           // update values for all levs at this column
-          update_interstitial_aerosols_levs(team, nlev, icol, dt, ptend_view,
-                                            // output
-                                            aero_nmr);
+          Kokkos::parallel_for(Kokkos::TeamVectorRange(team, nlev), [&](int kk) {
+            aero_nmr(icol, kk) += ptend_view(icol, kk) * dt;
+          });
         });
     ++s_idx;  // update index for the next species
   }
