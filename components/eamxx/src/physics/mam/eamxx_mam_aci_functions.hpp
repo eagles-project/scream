@@ -38,11 +38,12 @@ void compute_w0_and_rho(haero::ThreadTeamPolicy team_policy,
       });
 }
 
-void compute_values_at_interfaces(haero::ThreadTeamPolicy team_policy,
+void compute_tke_at_interfaces(haero::ThreadTeamPolicy team_policy,
                                   const MAMAci::const_view_2d var_mid,
                                   const MAMAci::view_2d dz, const int nlev_,
-                                  // output
-                                  MAMAci::view_2d var_int) {
+                                  MAMAci::view_2d w_sec_int,
+				  // output
+				  MAMAci::view_2d tke) {
   using CO = scream::ColumnOps<DefaultDevice, Real>;
 
   Kokkos::parallel_for(
@@ -50,31 +51,23 @@ void compute_values_at_interfaces(haero::ThreadTeamPolicy team_policy,
         const int icol = team.league_rank();
 
         const auto var_mid_col = ekat::subview(var_mid, icol);
-        const auto var_int_col = ekat::subview(var_int, icol);
+        const auto w_sec_int_col = ekat::subview(w_sec_int, icol);
         const auto dz_col      = ekat::subview(dz, icol);
 
         const Real bc_top = var_mid_col(0);
         const Real bc_bot = var_mid_col(nlev_ - 1);
 
         CO::compute_interface_values_linear(team, nlev_, var_mid_col, dz_col,
-                                            bc_top, bc_bot, var_int_col);
-      });
-}
-
-void compute_tke_using_w_sec(haero::ThreadTeamPolicy team_policy,
-                             const MAMAci::const_view_2d w_sec, const int nlev,
-                             // output
-                             MAMAci::view_2d tke) {
-  Kokkos::parallel_for(
-      team_policy, KOKKOS_LAMBDA(const haero::ThreadTeam &team) {
-        const int icol = team.league_rank();
+                                            bc_top, bc_bot, w_sec_int_col);
+        team.team_barrier();
         Kokkos::parallel_for(
-            Kokkos::TeamVectorRange(team, 0u, nlev + 1),
+            Kokkos::TeamVectorRange(team, nlev_ + 1),
             [&](int kk) { 
-	      tke(icol, kk) = (3.0 / 2.0) * w_sec(icol, kk); 
+	      tke(icol, kk) = (3.0 / 2.0) * w_sec_int(icol, kk); 
 	});
       });
 }
+
 void compute_subgrid_scale_velocities(
     haero::ThreadTeamPolicy team_policy, const MAMAci::const_view_2d tke,
     const Real wsubmin, const int top_lev, const int nlev,
@@ -86,11 +79,12 @@ void compute_subgrid_scale_velocities(
         // More refined computation of sub-grid vertical velocity
         // Set to be zero at the surface by initialization.
         Kokkos::parallel_for(
-            Kokkos::TeamVectorRange(team, 0u, top_lev), [&](int kk) {
+            Kokkos::TeamVectorRange(team, top_lev), [&](int kk) {
               wsub(icol, kk)    = wsubmin;
               wsubice(icol, kk) = 0.001;
               wsig(icol, kk)    = 0.001;
             });
+	// parallel_for ranges do not overlap, no need for barrier.
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange(team, top_lev, nlev), [&](int kk) {
               wsub(icol, kk) = haero::sqrt(0.5 * (tke(icol, kk) + tke(icol, kk + 1)) *
@@ -224,7 +218,8 @@ void compute_recipical_pseudo_density(haero::ThreadTeamPolicy team_policy,
 void call_function_dropmixnuc(
     haero::ThreadTeamPolicy team_policy, const Real dt,
     mam_coupling::DryAtmosphere &dry_atmosphere, const MAMAci::view_2d rpdel,
-    const MAMAci::const_view_2d kvh, const MAMAci::view_2d wsub,
+    const MAMAci::const_view_2d kvh_mid, const MAMAci::view_2d kvh_int, 
+    const MAMAci::view_2d wsub,
     const MAMAci::view_2d cloud_frac, const MAMAci::view_2d cloud_frac_prev,
     const mam_coupling::AerosolState &dry_aero, const int nlev,
 
@@ -252,6 +247,8 @@ void call_function_dropmixnuc(
     MAMAci::view_2d raercol[mam4::ndrop::pver][2], MAMAci::view_3d state_q_work,
     MAMAci::view_3d nact, MAMAci::view_3d mact,
     MAMAci::view_2d dropmixnuc_scratch_mem[MAMAci::dropmix_scratch_]) {
+
+  using CO = scream::ColumnOps<DefaultDevice, Real>;
   // Extract atmosphere variables
   MAMAci::const_view_2d T_mid = dry_atmosphere.T_mid;
   MAMAci::const_view_2d p_mid = dry_atmosphere.p_mid;
@@ -259,6 +256,7 @@ void call_function_dropmixnuc(
   MAMAci::const_view_2d pdel  = dry_atmosphere.p_del;
   MAMAci::const_view_2d p_int = dry_atmosphere.p_int;
   MAMAci::const_view_2d nc    = dry_atmosphere.nc;
+  MAMAci::const_view_2d atm_dz= dry_atmosphere.dz;
 
   //----------------------------------------------------------------------
   // ## Declare local variables for class variables
@@ -375,10 +373,21 @@ void call_function_dropmixnuc(
         haero::Atmosphere haero_atm =
             atmosphere_for_column(dry_atmosphere, icol);
 
+	// Compute kvh at interfaces
+        const auto kvh_mid_col = ekat::subview(kvh_mid, icol);
+        const auto kvh_int_col = ekat::subview(kvh_int, icol);
+        const auto dz_col      = ekat::subview(atm_dz, icol);
+
+        const Real bc_top = kvh_mid_col(0);
+        const Real bc_bot = kvh_mid_col(nlev - 1);
+
+        CO::compute_interface_values_linear(team, nlev, kvh_mid_col, dz_col,
+                                            bc_top, bc_bot, kvh_int_col);
+
         // Construct state_q (interstitial) and qqcw (cloud borne) arrays
         constexpr auto pver = mam4::ndrop::pver;
         Kokkos::parallel_for(
-            Kokkos::TeamVectorRange(team, 0u, pver), [&](int klev) {
+            Kokkos::TeamVectorRange(team, pver), [&](int klev) {
               Real state_q_at_lev_col[mam4::aero_model::pcnst] = {};
 
               // get state_q at a grid cell (col,lev)
@@ -413,14 +422,14 @@ void call_function_dropmixnuc(
                 }
               }
             });
-
+        team.team_barrier();
         mam4::ndrop::dropmixnuc(
             team, dt, ekat::subview(T_mid, icol), ekat::subview(p_mid, icol),
             ekat::subview(p_int, icol), ekat::subview(pdel, icol),
             ekat::subview(rpdel, icol),
             // in zm[kk] - zm[kk+1], for pver zm[kk-1] - zm[kk]
             ekat::subview(zm, icol), ekat::subview(state_q_work_loc, icol),
-            ekat::subview(nc, icol), ekat::subview(kvh, icol),  // kvh[kk+1]
+            ekat::subview(nc, icol), ekat::subview(kvh_int, icol),  // kvh[kk+1]
             ekat::subview(cloud_frac, icol), lspectype_amode, specdens_amode,
             spechygro, lmassptr_amode, num2vol_ratio_min_nmodes,
             num2vol_ratio_max_nmodes, numptr_amode, nspec_amode, exp45logsig,
