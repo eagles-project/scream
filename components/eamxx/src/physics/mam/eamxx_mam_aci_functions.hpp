@@ -466,7 +466,7 @@ void call_function_dropmixnuc(
                 }
               }
             });
-
+        
         mam4::ndrop::dropmixnuc(
             team, dt, ekat::subview(T_mid, icol), ekat::subview(p_mid, icol),
             ekat::subview(p_int, icol), ekat::subview(pdel, icol),
@@ -497,6 +497,7 @@ void call_function_dropmixnuc(
             ekat::subview(srcn, icol), ekat::subview(source, icol),
             ekat::subview(dz, icol), ekat::subview(csbot_cscen, icol),
             ekat::subview(raertend, icol), ekat::subview(qqcwtend, icol));
+        
       });
 }
 

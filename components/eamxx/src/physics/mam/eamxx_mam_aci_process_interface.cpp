@@ -555,7 +555,7 @@ void MAMAci::run_impl(const double dt) {
   Kokkos::fence();
 
   haero::ThreadTeamPolicy team_policy(ncol_, Kokkos::AUTO);
-
+  
   // FIXME: Temporary assignment of nc
   mam_coupling::copy_view_lev_slice(team_policy, wet_atm_.nc, nlev_,  // inputs
                                     nc_inp_to_aci_);                  // output
@@ -617,7 +617,8 @@ void MAMAci::run_impl(const double dt) {
   //  Compute activated CCN number tendency (tendnd_) and updated
   //  cloud borne aerosols (stored in a work array) and interstitial
   //  aerosols tendencies
-  call_function_dropmixnuc(team_policy, dt, dry_atm_, rpdel_, kvh_int_, wsub_,
+  //BALLI-1-ok
+    call_function_dropmixnuc(team_policy, dt, dry_atm_, rpdel_, kvh_int_, wsub_,
                            cloud_frac_, cloud_frac_prev_, dry_aero_, nlev_,
                            // output
                            coltend_, coltend_cw_, qcld_, ndropcol_, ndropmix_,
@@ -628,7 +629,7 @@ void MAMAci::run_impl(const double dt) {
                            raercol_cw_, raercol_, state_q_work_, nact_, mact_,
                            dropmixnuc_scratch_mem_);
   Kokkos::fence();  // wait for ptend_q_ to be computed.
-
+  /*
   Kokkos::deep_copy(ccn_0p02_,
                     Kokkos::subview(ccn_, Kokkos::ALL(), Kokkos::ALL(), 0));
   Kokkos::deep_copy(ccn_0p05_,
@@ -647,7 +648,7 @@ void MAMAci::run_impl(const double dt) {
   //  at this point as heterozenous freezing needs to use cloud borne aerosols
   //  before they are changed by the droplet activation (dropmixnuc) process.
   //---------------------------------------------------------------------------
-
+  //BALLI- Fail
   // Compute hetrozenous freezing
   call_hetfrz_compute_tendencies(
       team_policy, hetfrz_, dry_atm_, dry_aero_, factnum_, dt, nlev_,
@@ -674,6 +675,7 @@ void MAMAci::run_impl(const double dt) {
   // call post processing to convert dry mixing ratios to wet mixing ratios
   Kokkos::parallel_for("postprocess", scan_policy, postprocess_);
   Kokkos::fence();  // wait before returning to calling function
+  */
 }
 
 }  // namespace scream
