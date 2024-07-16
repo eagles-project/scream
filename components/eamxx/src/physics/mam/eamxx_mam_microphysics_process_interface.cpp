@@ -378,9 +378,10 @@ void MAMMicrophysics::run_impl(const double dt) {
   // allocation perspective
   auto o3_col_dens = buffer_.scratch[8];
 
+  auto ts = timestamp()+dt;
   {
     /* Gather time and state information for interpolation */
-  auto ts = timestamp()+dt;
+
   /* Update the LinozTimeState to reflect the current time, note the addition of dt */
   linoz_time_state_.t_now = ts.frac_of_year_in_days();
   /* Update time state and if the month has changed, update the data.*/
@@ -400,12 +401,9 @@ void MAMMicrophysics::run_impl(const double dt) {
                                  dry_atm_.p_mid,
                                  LinozData_out_,
                                  interpolated_Linoz_data_);
-
-  //
+  }
   const Real chlorine_loading = scream::mam_coupling::chlorine_loading_advance(ts, chlorine_values_,
                            chlorine_time_secs_);
-
-  }
 
   const_view_1d &col_latitudes = col_latitudes_;
   mam_coupling::DryAtmosphere &dry_atm =  dry_atm_;
@@ -566,19 +564,16 @@ void MAMMicrophysics::run_impl(const double dt) {
       Real do3_linoz, do3_linoz_psc, ss_o3, o3col_du_diag, o3clim_linoz_diag,
            zenith_angle_degrees;
 
-      // FIXME: Need to get chlorine loading data from file
-      // Real chlorine_loading = 0.0;
-
       Real rlats = col_lat * M_PI / 180.0; // convert column latitude to radians
       int o3_ndx = 0; // index of "O3" in solsym array (in EAM)
-      /*mam4::lin_strat_chem::lin_strat_chem_solve_kk(o3_col_dens_i(k), temp,
+      mam4::lin_strat_chem::lin_strat_chem_solve_kk(o3_col_dens_i(k), temp,
         zenith_angle, pmid, dt, rlats,
         linoz_o3_clim(icol, k), linoz_t_clim(icol, k), linoz_o3col_clim(icol, k),
         linoz_PmL_clim(icol, k), linoz_dPmL_dO3(icol, k), linoz_dPmL_dT(icol, k),
         linoz_dPmL_dO3col(icol, k), linoz_cariolle_pscs(icol, k),
         chlorine_loading, config.linoz.psc_T, vmr[o3_ndx],
         do3_linoz, do3_linoz_psc, ss_o3,
-        o3col_du_diag, o3clim_linoz_diag, zenith_angle_degrees);*/
+        o3col_du_diag, o3clim_linoz_diag, zenith_angle_degrees);
 
       // update source terms above the ozone decay threshold
       if (k > nlev - config.linoz.o3_lbl - 1) {
