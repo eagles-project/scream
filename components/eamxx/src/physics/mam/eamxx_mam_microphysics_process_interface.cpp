@@ -350,7 +350,7 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
 
     // here's where we store per-column photolysis rates
   photo_rates_ = view_3d("photo_rates", ncol_, nlev_, mam4::mo_photo::phtcnt);
-  // FIXME: liquid water cloud content: where do we get this?
+  //  liquid water cloud content
   lwc_= view_2d("liquid_water_cloud_content", ncol_, nlev_);
 
 
@@ -442,6 +442,13 @@ void MAMMicrophysics::run_impl(const double dt) {
     auto z_iface = ekat::subview(dry_atm.z_iface, icol);
     Real phis = dry_atm.phis(icol);
 
+    // liquid water cloud content
+    const auto& lwc_icol = ekat::subview(lwc, icol);
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev), [&](const int k) {
+    lwc_icol(k) = atm.ice_mixing_ratio(k) + atm.liquid_mixing_ratio(k);
+     });
+     team.team_barrier();
+
     // set surface state data
     haero::Surface sfc{};
 
@@ -453,7 +460,7 @@ void MAMMicrophysics::run_impl(const double dt) {
 
     // calculate o3 column densities (first component of col_dens in Fortran code)
     auto o3_col_dens_i = ekat::subview(o3_col_dens, icol);
-    //impl::compute_o3_column_density(team, atm, progs, o3_col_dens_i);
+    impl::compute_o3_column_density(team, atm, progs, o3_col_dens_i);
 
     // set up photolysis work arrays for this column.
     mam4::mo_photo::PhotoTableWorkArrays photo_work_arrays_icol;
@@ -463,17 +470,13 @@ void MAMMicrophysics::run_impl(const double dt) {
     mam4::mo_photo::set_photo_table_work_arrays(photo_table,
                                                 work_photo_table_icol,
                                                 photo_work_arrays_icol);
-
     // ... look up photolysis rates from our table
     // NOTE: the table interpolation operates on an entire column of data, so we
     // NOTE: must do it before dispatching to individual vertical levels
     Real zenith_angle = 0.0; // FIXME: need to get this from EAMxx [radians]
     Real surf_albedo = 0.0; // FIXME: surface albedo
     Real esfact = 0.0; // FIXME: earth-sun distance factor
-
-
     const auto& photo_rates_icol = ekat::subview(photo_rates, icol);
-    const auto& lwc_icol = ekat::subview(lwc, icol);
 #if 0
     mam4::mo_photo::table_photo(photo_rates_icol, atm.pressure, atm.hydrostatic_dp,
      atm.temperature, o3_col_dens_i, zenith_angle, surf_albedo, lwc_icol,
