@@ -206,6 +206,8 @@ void MAMMicrophysics::set_grids(const std::shared_ptr<const GridsManager> grids_
     VertEmissionsHorizInterp_ = scream::mam_coupling::create_horiz_remapper(grid_,vert_emis_file_name_,spa_map_file, var_names, tracer_file_type);
     VertEmissionsDataReader_ = scream::mam_coupling::create_tracer_data_reader(VertEmissionsHorizInterp_,vert_emis_file_name_);
     vert_emis_data_out_.set_file_type(tracer_file_type);
+    vert_emis_data_beg_.set_file_type(tracer_file_type);
+    vert_emis_data_end_.set_file_type(tracer_file_type);
   }
 #endif
 
@@ -425,7 +427,8 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
      }
   }
 
-    // linoz reader
+    // vertical emissions
+ #if 1
   {
     const auto io_grid_emis = VertEmissionsHorizInterp_->get_src_grid();
     const int num_cols_io_emis = io_grid_emis->get_num_local_dofs(); // Number of columns on this rank
@@ -434,6 +437,7 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
     vert_emis_data_end_.init(num_cols_io_emis, num_levs_io_emis, nvars);
     scream::mam_coupling::update_tracer_data_from_file(VertEmissionsDataReader_,
     timestamp(),curr_month, *VertEmissionsHorizInterp_, vert_emis_data_end_);
+    std::cout << "Done here in vertical emissiones" << "\n";
 
     vert_emis_data_beg_.init(num_cols_io_emis, num_levs_io_emis, nvars);
     vert_emis_data_beg_.allocate_data_views();
@@ -446,11 +450,14 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
     if (vert_emis_data_out_.file_type == TracerFileType::FORMULA_PS)
     {
       vert_emis_data_out_.allocate_ps();
-    } else {
-      // p_src_linoz_ = view_2d("pressure_src_invariant",ncol_, num_levs_io_linoz );
-      // scream::mam_coupling::compute_p_src_zonal_files(linoz_file_name_,p_src_linoz_);
+    } else if (vert_emis_data_out_.file_type == TracerFileType::VERT_EMISSION)  {
+      vert_emis_altitude_int_ = scream::mam_coupling::get_altitude_int(VertEmissionsHorizInterp_,
+                                 vert_emis_file_name_);
     }
+
+      vert_emis_output_[0]=view_2d("vert_emis_output_",num_cols_io_emis, num_levs_io_emis );
   }
+#endif
 
 #endif
 
@@ -491,7 +498,7 @@ void MAMMicrophysics::run_impl(const double dt) {
   linoz_output[6] = linoz_dPmL_dO3col;
   linoz_output[7] = linoz_cariolle_pscs;
 
-  view_2d vert_emis_output[1];
+
 
   // it's a bit wasteful to store this for all columns, but simpler from an
   // allocation perspective
@@ -506,6 +513,7 @@ void MAMMicrophysics::run_impl(const double dt) {
 
 
   // /* Update the TracerTimeState to reflect the current time, note the addition of dt */
+  std::cout << " INV" << "\n";
   linoz_time_state_.t_now = ts.frac_of_year_in_days();
   scream::mam_coupling::advance_tracer_data(TracerDataReader_,
                       *TracerHorizInterp_,
@@ -516,8 +524,11 @@ void MAMMicrophysics::run_impl(const double dt) {
                       tracer_data_out_,
                       p_src_invariant_,
                       dry_atm_.p_mid,
+                      vert_emis_altitude_int_,
+                      dry_atm_.z_iface,
                       cnst_offline_);
 
+   std::cout << " LINOZ" << "\n";
    scream::mam_coupling::advance_tracer_data(LinozDataReader_,
                       *LinozHorizInterp_,
                       ts,
@@ -527,10 +538,13 @@ void MAMMicrophysics::run_impl(const double dt) {
                       linoz_data_out_,
                       p_src_linoz_,
                       dry_atm_.p_mid,
+                      vert_emis_altitude_int_,
+                      dry_atm_.z_iface,
                       linoz_output);
 
     //
-#if 0
+#if 1
+    std::cout << " VERT_EMISSION" << "\n";
     scream::mam_coupling::advance_tracer_data(VertEmissionsDataReader_,
                       *VertEmissionsHorizInterp_,
                       ts,
@@ -540,7 +554,9 @@ void MAMMicrophysics::run_impl(const double dt) {
                       vert_emis_data_out_,
                       p_src_linoz_,
                       dry_atm_.p_mid,
-                      vert_emis_output);
+                      vert_emis_altitude_int_,
+                      dry_atm_.z_iface,
+                      vert_emis_output_);
 
 #endif
   const_view_1d &col_latitudes = col_latitudes_;
