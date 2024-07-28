@@ -198,12 +198,20 @@ void MAMMicrophysics::set_grids(const std::shared_ptr<const GridsManager> grids_
   }
 
   {
-    vert_emis_file_name_.push_back("cmip6_mam4_bc_a4_elev_ne2np4_2010_clim_c20240726_OD.nc");
-    vert_emis_file_name_.push_back("cmip6_mam4_so2_elev_ne2np4_2010_clim_c20240726_OD.nc");
+    // cmip6_mam4_bc_a4_elev_ne2np4_2010_clim_c20240726_OD.nc
+    std::string  mam4_bc_a4_verti_emiss_file_name =
+      m_params.get<std::string>("mam4_bc_a4_verti_emiss_file_name");
+    std::string  mam4_so2_verti_emiss_file_name =
+    //"cmip6_mam4_so2_elev_ne2np4_2010_clim_c20240726_OD.nc"
+      m_params.get<std::string>("mam4_so2_verti_emiss_file_name");
+
+    vert_emis_file_name_.push_back(mam4_bc_a4_verti_emiss_file_name);
+    vert_emis_file_name_.push_back(mam4_so2_verti_emiss_file_name);
     std::string spa_map_file="";
+    // FIXME: I am assiming only one variable per file with name BB
     std::vector<std::string> var_names{"BB"};
 
-    for (auto file_name :vert_emis_file_name_)
+   for (auto file_name :vert_emis_file_name_)
    {
     TracerFileType tracer_file_type;
     auto hor_rem = scream::mam_coupling::create_horiz_remapper(grid_,file_name,
