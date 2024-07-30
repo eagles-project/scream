@@ -382,7 +382,7 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   const std::string xs_long_file =
       m_params.get<std::string>("mam4_xs_long_file");
 
-  // photo_table_ = impl::read_photo_table(rsf_file, xs_long_file);
+  photo_table_ = impl::read_photo_table(rsf_file, xs_long_file);
 
   // FIXME: read relevant land use data from drydep surface file
 
@@ -433,8 +433,8 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
    chlorine_values_, chlorine_time_secs_ );
   }
 
-  // const int photo_table_len = get_photo_table_work_len(photo_table_);
-  // work_photo_table_ = view_2d("work_photo_table", ncol_, photo_table_len);
+  const int photo_table_len = get_photo_table_work_len(photo_table_);
+  work_photo_table_ = view_2d("work_photo_table", ncol_, photo_table_len);
 
     // here's where we store per-column photolysis rates
   photo_rates_ = view_3d("photo_rates", ncol_, nlev_, mam4::mo_photo::phtcnt);
@@ -636,6 +636,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                       dry_atm_.z_iface,
                       vert_emis_output);
     }
+
   const_view_1d &col_latitudes = col_latitudes_;
   const_view_1d &col_longitudes = col_longitudes_; 
   const_view_1d &d_sfc_alb_dir_vis = d_sfc_alb_dir_vis_;
@@ -708,7 +709,12 @@ void MAMMicrophysics::run_impl(const double dt) {
 
     // 
     auto invariants_icol = ekat::subview(invariants,icol);
-    auto cnst_offline_icol = ekat::subview(cnst_offline,icol);
+
+    view_1d cnst_offline_icol[mam4::mo_setinv::num_tracer_cnst]; 
+    for (int i = 0; i < mam4::mo_setinv::num_tracer_cnst; ++i) {
+        cnst_offline_icol[i] = ekat::subview(cnst_offline[i],icol);
+    }
+
     mam4::mo_setinv::setinv(team, invariants_icol, atm.temperature, atm.vapor_mixing_ratio, 
                             cnst_offline_icol, atm.pressure);
 
@@ -734,9 +740,9 @@ void MAMMicrophysics::run_impl(const double dt) {
 
     const auto& photo_rates_icol = ekat::subview(photo_rates, icol);
 
-    mam4::mo_photo::table_photo(photo_rates_icol, atm.pressure, atm.hydrostatic_dp,
+    /*mam4::mo_photo::table_photo(photo_rates_icol, atm.pressure, atm.hydrostatic_dp,
      atm.temperature, o3_col_dens_i, zenith_angle, surf_albedo, atm.liquid_mixing_ratio,
-     atm.cloud_fraction, eccf, photo_table, photo_work_arrays_icol);
+     atm.cloud_fraction, eccf, photo_table, photo_work_arrays_icol);*/
     
     // compute aerosol microphysics on each vertical level within this column
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, nlev), [&](const int k) {
@@ -789,7 +795,8 @@ void MAMMicrophysics::run_impl(const double dt) {
       //
       Real photo_rates_k[mam4::mo_photo::phtcnt];
       for (int i = 0; i < mam4::mo_photo::phtcnt; ++i) {
-        photo_rates_k[i] = photo_rates_icol(k, i);
+        //photo_rates_k[i] = photo_rates_icol(k, i);
+          photo_rates_k[i] = 1.0e-20;
       }
       
       Real invariants_k[mam4::gas_chemistry::nfs];
@@ -841,7 +848,7 @@ void MAMMicrophysics::run_impl(const double dt) {
            zenith_angle_degrees;
 
       int o3_ndx = 0; // index of "O3" in solsym array (in EAM)
-#if 0
+
       mam4::lin_strat_chem::lin_strat_chem_solve_kk(o3_col_dens_i(k), temp,
         zenith_angle, pmid, dt, rlats,
         linoz_o3_clim(icol, k), linoz_t_clim(icol, k), linoz_o3col_clim(icol, k),
@@ -850,13 +857,13 @@ void MAMMicrophysics::run_impl(const double dt) {
         chlorine_loading, config.linoz.psc_T, vmr[o3_ndx],
         do3_linoz, do3_linoz_psc, ss_o3,
         o3col_du_diag, o3clim_linoz_diag, zenith_angle_degrees);
-#endif
+
       // update source terms above the ozone decay threshold
-      /*if (k > nlev - config.linoz.o3_lbl - 1) {
+      if (k > nlev - config.linoz.o3_lbl - 1) {
         Real do3_mass; // diagnostic, not needed
         mam4::lin_strat_chem::lin_strat_sfcsink_kk(dt, pdel, vmr[o3_ndx], config.linoz.o3_sfc,
           config.linoz.o3_tau, do3_mass);
-      }*/
+      }
 
       // ... check for negative values and reset to zero
       for (int i = 0; i < gas_pcnst; ++i) {
