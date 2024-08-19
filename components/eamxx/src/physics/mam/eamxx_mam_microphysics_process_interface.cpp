@@ -480,8 +480,8 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
         chlorine_time_secs_);
   }
 
-  // const int photo_table_len = get_photo_table_work_len(photo_table_);
-  // work_photo_table_ = view_2d("work_photo_table", ncol_, photo_table_len);
+  const int photo_table_len = get_photo_table_work_len(photo_table_);
+  work_photo_table_ = view_2d("work_photo_table", ncol_, photo_table_len);
 
   // here's where we store per-column photolysis rates
   photo_rates_ = view_3d("photo_rates", ncol_, nlev_, mam4::mo_photo::phtcnt);
@@ -764,12 +764,12 @@ void MAMMicrophysics::run_impl(const double dt) {
 
         // set up photolysis work arrays for this column.
         mam4::mo_photo::PhotoTableWorkArrays photo_work_arrays_icol;
-        // const auto& work_photo_table_icol = ekat::subview(work_photo_table,
-        // icol);
+        const auto& work_photo_table_icol = ekat::subview(work_photo_table,
+        icol);
         //  set work view using 1D photo_work_arrays_icol
-        // mam4::mo_photo::set_photo_table_work_arrays(photo_table,
-        //                                             work_photo_table_icol,
-        //                                             photo_work_arrays_icol);
+        mam4::mo_photo::set_photo_table_work_arrays(photo_table,
+                                                    work_photo_table_icol,
+                                                    photo_work_arrays_icol);
 
         // ... look up photolysis rates from our table
         // NOTE: the table interpolation operates on an entire column of data,
@@ -784,11 +784,11 @@ void MAMMicrophysics::run_impl(const double dt) {
 
         const auto &photo_rates_icol = ekat::subview(photo_rates, icol);
 
-        // mam4::mo_photo::table_photo(photo_rates_icol, atm.pressure,
-        // atm.hydrostatic_dp,
-        //  atm.temperature, o3_col_dens_i, zenith_angle, surf_albedo,
-        //  atm.liquid_mixing_ratio, atm.cloud_fraction, eccf, photo_table,
-        //  photo_work_arrays_icol);
+        mam4::mo_photo::table_photo(photo_rates_icol, atm.pressure,
+        atm.hydrostatic_dp,
+         atm.temperature, o3_col_dens_i, zenith_angle, surf_albedo,
+         atm.liquid_mixing_ratio, atm.cloud_fraction, eccf, photo_table,
+         photo_work_arrays_icol);
 
         // compute aerosol microphysics on each vertical level within this
         // column
