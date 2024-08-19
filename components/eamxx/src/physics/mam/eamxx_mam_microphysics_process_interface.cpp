@@ -751,7 +751,7 @@ void MAMMicrophysics::run_impl(const double dt) {
 
         //
         auto invariants_icol = ekat::subview(invariants, icol);
-        
+
         view_1d cnst_offline_icol[mam4::mo_setinv::num_tracer_cnst];
         for (int i = 0; i < mam4::mo_setinv::num_tracer_cnst; ++i) {
             cnst_offline_icol[i] = ekat::subview(cnst_offline[i],icol);
@@ -769,7 +769,8 @@ void MAMMicrophysics::run_impl(const double dt) {
 
         // set up photolysis work arrays for this column.
         mam4::mo_photo::PhotoTableWorkArrays photo_work_arrays_icol;
-        const auto& work_photo_table_icol = ekat::subview(work_photo_table, icol);
+        const auto& work_photo_table_icol = ekat::subview(work_photo_table,
+        icol);
         //  set work view using 1D photo_work_arrays_icol
         mam4::mo_photo::set_photo_table_work_arrays(photo_table,
                                                     work_photo_table_icol,
@@ -788,11 +789,11 @@ void MAMMicrophysics::run_impl(const double dt) {
 
         const auto &photo_rates_icol = ekat::subview(photo_rates, icol);
 
-        // mam4::mo_photo::table_photo(photo_rates_icol, atm.pressure,
-        // atm.hydrostatic_dp,
-        //  atm.temperature, o3_col_dens_i, zenith_angle, surf_albedo,
-        //  atm.liquid_mixing_ratio, atm.cloud_fraction, eccf, photo_table,
-        //  photo_work_arrays_icol);
+        mam4::mo_photo::table_photo(photo_rates_icol, atm.pressure,
+        atm.hydrostatic_dp,
+         atm.temperature, o3_col_dens_i, zenith_angle, surf_albedo,
+         atm.liquid_mixing_ratio, atm.cloud_fraction, eccf, photo_table,
+         photo_work_arrays_icol);
 
         // compute aerosol microphysics on each vertical level within this
         // column
@@ -889,7 +890,8 @@ void MAMMicrophysics::run_impl(const double dt) {
               Real dgncur_awet[num_modes] = {};
               Real wetdens[num_modes]     = {};
               Real qaerwat[num_modes]     = {};
-              impl::compute_water_content(progs, k, qv, temp, pmid, dgncur_a,
+
+              impl::compute_water_content(progs, atm, k, qv, temp, pmid, dgncur_a,
                                           dgncur_awet, wetdens, qaerwat);
 
               // do aerosol microphysics (gas-aerosol exchange, nucleation,
@@ -899,7 +901,6 @@ void MAMMicrophysics::run_impl(const double dt) {
                   cldfrac, vmr, vmrcw, vmr_pregaschem, vmr_precldchem,
                   vmrcw_precldchem, vmr_tendbb, vmrcw_tendbb, dgncur_a,
                   dgncur_awet, wetdens, qaerwat);
-
               //-----------------
               // LINOZ chemistry
               //-----------------
@@ -910,7 +911,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                   o3clim_linoz_diag, zenith_angle_degrees;
 
               int o3_ndx = 0;  // index of "O3" in solsym array (in EAM)
-#if 0
+
       mam4::lin_strat_chem::lin_strat_chem_solve_kk(o3_col_dens_i(k), temp,
         zenith_angle, pmid, dt, rlats,
         linoz_o3_clim(icol, k), linoz_t_clim(icol, k), linoz_o3col_clim(icol, k),
@@ -919,7 +920,7 @@ void MAMMicrophysics::run_impl(const double dt) {
         chlorine_loading, config.linoz.psc_T, vmr[o3_ndx],
         do3_linoz, do3_linoz_psc, ss_o3,
         o3col_du_diag, o3clim_linoz_diag, zenith_angle_degrees);
-#endif
+
               // update source terms above the ozone decay threshold
               /*if (k > nlev - config.linoz.o3_lbl - 1) {
                 Real do3_mass; // diagnostic, not needed
