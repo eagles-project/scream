@@ -417,7 +417,7 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   const std::string xs_long_file =
       m_params.get<std::string>("mam4_xs_long_file");
 
-  // photo_table_ = impl::read_photo_table(rsf_file, xs_long_file);
+  photo_table_ = impl::read_photo_table(rsf_file, xs_long_file);
 
   // FIXME: read relevant land use data from drydep surface file
 
