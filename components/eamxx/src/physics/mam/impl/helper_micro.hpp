@@ -21,6 +21,22 @@ using ESU      = ekat::ExeSpaceUtils<ExeSpace>;
 using C        = scream::physics::Constants<Real>;
 using LIV      = ekat::LinInterp<Real, 1>;
 
+// We have a similar version in MAM4xx.
+// This version was created because the data view cannot be modified
+// inside the parallel_for.
+// This struct will be used in init while reading nc files.
+// The MAM4xx version will be used instead of parallel_for that loops over cols.
+struct ForcingHelper {
+  // This index is in Fortran format. i.e. starts in 1
+  int frc_ndx;
+  // does this file have altitude?
+  bool file_alt_data;
+  // number of sectors per forcing
+  int nsectors;
+  // offset in output vector from reader
+  int offset;
+  };
+
 enum TracerFileType {
   // file with PS ncol, lev, and time
   FORMULA_PS,
@@ -35,6 +51,7 @@ enum TracerFileType {
  Therefore, if a file contains more than this number, it is acceptable to
  increase this limit. Currently, Linoz files have 8 fields. */
 constexpr int MAX_NVARS_TRACER = 10;
+constexpr int MAX_NUM_VERT_EMISSION_FIELDS = 25;
 
 // Linoz structures to help manage all of the variables:
 struct TracerTimeState {
