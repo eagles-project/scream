@@ -1636,7 +1636,8 @@ void modal_aero_amicphys_intr(const AmicPhysConfig &config, const int nstep,
   Real qgcm_tendaa[gas_pcnst()][nqtendaa()];
   Real qaerwatgcm4[num_modes];
   if(nsubarea == 1) {
-    for(int i = 0; i < gas_pcnst(); ++i) qgcm4[i] = qsub4[i][0];
+    for(int i = 0; i < gas_pcnst(); ++i){ qgcm4[i] = qsub4[i][0];
+    printf("--->BALLI:-amic3: %e,%e\n",qgcm4[i],qsub4[i][0]);}
     for(int i = 0; i < gas_pcnst(); ++i)
       for(int j = 0; j < nqtendaa(); ++j)
         qgcm_tendaa[i][j] = qsub_tendaa[i][j][0];
@@ -1646,8 +1647,9 @@ void modal_aero_amicphys_intr(const AmicPhysConfig &config, const int nstep,
     for(int i = 0; i < gas_pcnst(); ++i)
       for(int j = 0; j < nqtendaa(); ++j) qgcm_tendaa[i][j] = 0.0;
     for(int n = 0; n < nsubarea; ++n) {
-      for(int i = 0; i < gas_pcnst(); ++i)
+      for(int i = 0; i < gas_pcnst(); ++i){
         qgcm4[i] += qsub4[i][n] * afracsub[n];
+        printf("--->BALLI:-amic2: %e,%e,%e\n",qgcm4[i],qsub4[i][n],afracsub[n]);}
       for(int i = 0; i < gas_pcnst(); ++i)
         for(int j = 0; j < nqtendaa(); ++j)
           qgcm_tendaa[i][j] =
@@ -1686,6 +1688,7 @@ void modal_aero_amicphys_intr(const AmicPhysConfig &config, const int nstep,
   for(int lmz = 0; lmz < gas_pcnst(); ++lmz) {
     if(lmapcc_all(lmz) > 0) {
       // HW, to ensure non-negative
+      printf("--->BALLI:-amic1:, %e\n",qgcm4[lmz]);
       q[lmz] = haero::max(qgcm4[lmz], 0.0);
       if(lmapcc_all(lmz) >= lmapcc_val_aer()) {
         // HW, to ensure non-negative

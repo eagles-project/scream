@@ -35,7 +35,7 @@ struct ForcingHelper {
   int nsectors;
   // offset in output vector from reader
   int offset;
-  };
+};
 
 enum TracerFileType {
   // file with PS ncol, lev, and time
@@ -50,7 +50,7 @@ enum TracerFileType {
  Note: We are not allocating memory for MAX_NVARS_TRACER tracers.
  Therefore, if a file contains more than this number, it is acceptable to
  increase this limit. Currently, Linoz files have 8 fields. */
-constexpr int MAX_NVARS_TRACER = 10;
+constexpr int MAX_NVARS_TRACER             = 10;
 constexpr int MAX_NUM_VERT_EMISSION_FIELDS = 25;
 
 // Linoz structures to help manage all of the variables:
@@ -602,6 +602,10 @@ inline void perform_vertical_interpolation(const view_2d &p_src_c,
   // At this stage, begin/end must have the same horiz dimensions
   EKAT_REQUIRE(input.ncol_ == output[0].extent(0));
 
+   for (int k=0; k<input.nvars_; ++k){
+    //printf("pp_3:%e,%i\n", input.data[k](0,0),k);
+  }
+
 #if 1
   // FIXME: I was encountering a compilation error when using const_view_2d.
   // The issue is fixed by https://github.com/E3SM-Project/EKAT/pull/346.
@@ -655,8 +659,10 @@ inline void perform_vertical_interpolation(const view_2d &p_src_c,
 
         const auto y1 = ekat::subview(input.data[ivar], icol);
         const auto y2 = ekat::subview(output[ivar], icol);
+        printf("x1:%e,%e,%e\n", x1(0),x2(0),y1(0));
 
         vert_interp.lin_interp(team, x1, x2, y1, y2, icol);
+        printf("x-out:%e,\n", y2(0));
       });
   Kokkos::fence();
 }
@@ -754,9 +760,15 @@ inline void advance_tracer_data(
   /* Update time state and if the month has changed, update the data.*/
   update_tracer_timestate(scorpio_reader, ts, tracer_horiz_interp, time_state,
                           data_tracer_beg, data_tracer_end);
+  for (int k=0; k<72; ++k){
+    //printf("pp_1:%e, %e,%i\n", data_tracer_beg.data[0](0,k), data_tracer_end.data[0](0,k),k);
+  }
   // Step 1. Perform time interpolation
   perform_time_interpolation(time_state, data_tracer_beg, data_tracer_end,
                              data_tracer_out);
+for (int k=0; k<72; ++k){
+    //printf("pp_2:%e, %i\n", data_tracer_out.data[0](0,k),k);
+  }
 
   if(data_tracer_out.file_type == FORMULA_PS) {
     // Step 2. Compute source pressure levels

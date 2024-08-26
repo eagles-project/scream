@@ -27,9 +27,7 @@ void compute_water_content(const mam4::Prognostics &progs,
 
   constexpr int nvars = aero_model::pcnst;
   Real state_q[nvars];  // aerosol tracers for level k
-  mam4::utils::extract_stateq_from_prognostics(progs,
-                                  atm,state_q,
-                                  k);
+  mam4::utils::extract_stateq_from_prognostics(progs, atm, state_q, k);
 
   // compute the dry volume for each mode, and from it the current dry
   // geometric nominal particle diameter.
@@ -64,6 +62,9 @@ void compute_water_content(const mam4::Prognostics &progs,
         dryvol_i, progs.n_mode_i[imode](k), vol2num_min, vol2num_max,
         mode.min_diameter, mode.max_diameter, mode.mean_std_dev,
         dgncur_a[imode], vol2num);
+    // if (dgncur_a[imode]<=0){
+    // printf("BALLI: %e, %e, %i, %i\n",dryvol_i,dgncur_a[imode], imode,k);
+    //}
   }
 
   // calculate dry aerosol properties
