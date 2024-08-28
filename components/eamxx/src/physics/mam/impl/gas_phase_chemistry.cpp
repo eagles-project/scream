@@ -469,7 +469,8 @@ void gas_phase_chemistry(
 
   // ... set rates for "tabular" and user specified reactions
   Real reaction_rates[rxntot];
-  mam4::gas_chemistry::setrxt(reaction_rates, temp);
+  mam4::gas_chemistry::setrxt(reaction_rates,  // out
+                              temp);           // in
   for(int i = 0; i < rxntot; ++i) {
     // if(reaction_rates[i]>1e-30)printf("React rates:%e,
     // %i\n",reaction_rates[i],i);
@@ -482,16 +483,22 @@ void gas_phase_chemistry(
                 inv_h2o_ndx = 3;
   mam4::gas_chemistry::usrrxt(reaction_rates,                        // out
                               temp, invariants, invariants[indexm],  // in
-                              usr_HO2_HO2_ndx, usr_DMS_OH_ndx,
-                              usr_SO2_OH_ndx,  // in
-                              inv_h2o_ndx);    // in
+                              usr_HO2_HO2_ndx, usr_DMS_OH_ndx,       // in
+                              usr_SO2_OH_ndx,                        // in
+                              inv_h2o_ndx);                          // in
   for(int i = 0; i < rxntot; ++i) {
     if(reaction_rates[i] > 1e-30)
-      printf("React rates:%0.15e,%i\n", reaction_rates[i], i);
+      printf("React rates-usr:%0.15e,%i\n", reaction_rates[i], i);
   }
 
-  mam4::gas_chemistry::adjrxt(reaction_rates, invariants, invariants[indexm]);
-
+  mam4::gas_chemistry::adjrxt(reaction_rates,                   // out
+                              invariants, invariants[indexm]);  // in
+  for(int i = 0; i < rxntot; ++i) {
+    if(reaction_rates[i] > 1e-30) {
+      printf("React rates-adj:%0.15e,%i\n", reaction_rates[i], i);
+    }
+  }
+#if 0
   //===================================
   // Photolysis rates at time = t(n+1)
   //===================================
