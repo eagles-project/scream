@@ -39,7 +39,7 @@ grids_manager:
 
 initial_conditions:
   # The name of the file containing the initial conditions for this test.
-  Filename: /qfs/people/sing201/eagles/refactor_mam/mam4xx_scream/3src/screami_unit_tests_mam4xx_ne2np4L72_LAT_m5.01469776300895_LON_28p1480318842490_MICROPHYSICS.nc
+  Filename: /qfs/people/sing201/eagles/refactor_mam/mam4xx_scream/3src/screami_unit_tests_mam4xx_ne2np4L72_LAT_m5.01469776300895_LON_28p1480318842490_MICROPHYSICS_2nd.nc
   topography_filename: ${TOPO_DATA_DIR}/${EAMxx_tests_TOPO_FILE}
   phis : 1.0
   pbl_height: 1.0

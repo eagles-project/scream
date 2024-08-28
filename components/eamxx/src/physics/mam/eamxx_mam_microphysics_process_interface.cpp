@@ -691,8 +691,9 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
 }
 
 void MAMMicrophysics::run_impl(const double dt) {
-  //const auto scan_policy = ekat::ExeSpaceUtils<
-  //    KT::ExeSpace>::get_thread_range_parallel_scan_team_policy(ncol_, nlev_);
+  // const auto scan_policy = ekat::ExeSpaceUtils<
+  //     KT::ExeSpace>::get_thread_range_parallel_scan_team_policy(ncol_,
+  //     nlev_);
   const auto scan_policy = ekat::ExeSpaceUtils<
       KT::ExeSpace>::get_thread_range_parallel_scan_team_policy(1, nlev_);
   // const auto policy =
@@ -737,30 +738,30 @@ void MAMMicrophysics::run_impl(const double dt) {
   linoz_output[5] = linoz_dPmL_dT;
   linoz_output[6] = linoz_dPmL_dO3col;
   linoz_output[7] = linoz_cariolle_pscs;
-
+#endif
   // it's a bit wasteful to store this for all columns, but simpler from an
   // allocation perspective
   auto o3_col_dens = buffer_.scratch[8];
 
   /* Gather time and state information for interpolation */
+
   const auto ts = timestamp() + dt;
-  //#if 0
+#if 0
   const Real chlorine_loading = scream::mam_coupling::chlorine_loading_advance(
       ts, chlorine_values_, chlorine_time_secs_);
-
+#endif
   // /* Update the TracerTimeState to reflect the current time, note the
   // addition of dt */
+
   linoz_time_state_.t_now = ts.frac_of_year_in_days();
+
   // FIXME: we do not need altitude_int for invariant tracers and linoz fields.
   view_1d dummy_altitude_int;
-  for (int k=0; k<nlev_; ++k){
-    //printf("pp:%.10e, %.10e\n", tracer_data_beg_.data[0](0,k), tracer_data_end_.data[0](0,k));
-  }
   scream::mam_coupling::advance_tracer_data(
       TracerDataReader_, *TracerHorizInterp_, ts, linoz_time_state_,
       tracer_data_beg_, tracer_data_end_, tracer_data_out_, p_src_invariant_,
       dry_atm_.p_mid, dummy_altitude_int, dry_atm_.z_iface, cnst_offline_);
-
+#if 0
   scream::mam_coupling::advance_tracer_data(
       LinozDataReader_, *LinozHorizInterp_, ts, linoz_time_state_,
       linoz_data_beg_, linoz_data_end_, linoz_data_out_, p_src_linoz_,
@@ -784,30 +785,30 @@ void MAMMicrophysics::run_impl(const double dt) {
     i++;
   }
 #endif
-  const_view_1d &col_latitudes     = col_latitudes_;
-  const_view_1d &col_longitudes    = col_longitudes_;
+  const_view_1d &col_latitudes  = col_latitudes_;
+  const_view_1d &col_longitudes = col_longitudes_;
 
   const_view_1d &d_sfc_alb_dir_vis = d_sfc_alb_dir_vis_;
 
-  mam_coupling::DryAtmosphere &dry_atm        = dry_atm_;
-  mam_coupling::AerosolState &dry_aero        = dry_aero_;
-  mam_coupling::AerosolState &wet_aero        = wet_aero_;
+  mam_coupling::DryAtmosphere &dry_atm = dry_atm_;
+  mam_coupling::AerosolState &dry_aero = dry_aero_;
+  mam_coupling::AerosolState &wet_aero = wet_aero_;
 #if 0
   mam4::mo_photo::PhotoTableData &photo_table = photo_table_;
-#endif  
-  const int nlev                              = nlev_;
-#if 0
-  const Config &config                        = config_;
-  const auto &step                            = step_;
-  const auto &work_photo_table                = work_photo_table_;
-  const auto &photo_rates                     = photo_rates_;
+#endif
+  const int nlev = nlev_;
+
+  const Config &config         = config_;
+  const auto &step             = step_;
+  const auto &work_photo_table = work_photo_table_;
+  const auto &photo_rates      = photo_rates_;
 
   const auto &invariants   = invariants_;
   const auto &cnst_offline = cnst_offline_;
 
   // Compute orbital parameters; these are used both for computing
   // the solar zenith angle.
-#endif
+
   auto ts2 = timestamp();
 
   double obliqr, lambm0, mvelpp;
@@ -825,8 +826,8 @@ void MAMMicrophysics::run_impl(const double dt) {
     // compute orbital parameters based on current year
     orbital_year = ts2.get_year();
   }
-  shr_orb_params_c2f(&orbital_year, // in
-  &eccen, &obliq, &mvelp, &obliqr, &lambm0, &mvelpp); //out
+  shr_orb_params_c2f(&orbital_year,                                       // in
+                     &eccen, &obliq, &mvelp, &obliqr, &lambm0, &mvelpp);  // out
   // Use the orbital parameters to calculate the solar declination and
   // eccentricity factor
 
@@ -835,8 +836,8 @@ void MAMMicrophysics::run_impl(const double dt) {
   // Want day + fraction; calday 1 == Jan 1 0Z
   auto calday = ts2.frac_of_year_in_days() + 1;
 
-  shr_orb_decl_c2f(calday, eccen, mvelpp, lambm0, obliqr, // in
-   &delta, &eccf); //out
+  shr_orb_decl_c2f(calday, eccen, mvelpp, lambm0, obliqr,  // in
+                   &delta, &eccf);                         // out
 
   constexpr int num_modes = mam4::AeroConfig::num_modes();
   constexpr int gas_pcnst = mam_coupling::gas_pcnst();
@@ -856,7 +857,7 @@ void MAMMicrophysics::run_impl(const double dt) {
   Kokkos::parallel_for(
       policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
         const int icol = team.league_rank();  // column index
-        
+
         Real col_lat = col_latitudes(icol);   // column latitude (degrees?)
         Real col_lon = col_longitudes(icol);  // column longitude
 
@@ -865,23 +866,23 @@ void MAMMicrophysics::run_impl(const double dt) {
         Real rlons =
             col_lon * M_PI / 180.0;  // convert column longitude to radians
         // fetch column-specific atmosphere state data
-        
-        auto atm     = mam_coupling::atmosphere_for_column(dry_atm, icol);
-#if 0
+
+        auto atm = mam_coupling::atmosphere_for_column(dry_atm, icol);
+
         auto z_iface = ekat::subview(dry_atm.z_iface, icol);
         Real phis    = dry_atm.phis(icol);
 
         // set surface state data
         haero::Surface sfc{};
-#endif
+
         // fetch column-specific subviews into aerosol prognostics
         mam4::Prognostics progs =
             mam_coupling::aerosols_for_column(dry_aero, icol);
-#if 0
 
         // set up diagnostics
         mam4::Diagnostics diags(nlev);
         const auto invariants_icol = ekat::subview(invariants, icol);
+#if 0
         mam4::mo_setext::Forcing forcings_in[extcnt];
         for(int i = 0; i < extcnt; ++i) {
           int nsectors       = forcings[i].nsectors;
@@ -897,43 +898,28 @@ void MAMMicrophysics::run_impl(const double dt) {
             forcings_in[i].fields_data[isec] = ekat::subview(field, icol);
           }
         }
-        for(int k = 0; k < 5; ++k) {
-          // printf("BALLI:dry-1:, %.10e, %i\n", dry_aero.int_aero_mmr[0][1](icol,
-          // k),
-          //        k);
-        }
+#endif
         const auto extfrc_icol = ekat::subview(extfrc, icol);
-
+#if 0
         mam4::mo_setext::extfrc_set(forcings_in, extfrc_icol);
+#endif
 
         view_1d cnst_offline_icol[mam4::mo_setinv::num_tracer_cnst];
         for(int i = 0; i < mam4::mo_setinv::num_tracer_cnst; ++i) {
           cnst_offline_icol[i] = ekat::subview(cnst_offline[i], icol);
         }
-        for(int k = 0; k < 5; ++k) {
-          // printf("BALLI:dry-2:, %.10e, %i\n", dry_aero.int_aero_mmr[0][1](icol,
-          // k),
-          //        k);
-        }
+
         mam4::mo_setinv::setinv(team, invariants_icol, atm.temperature,
                                 atm.vapor_mixing_ratio, cnst_offline_icol,
                                 atm.pressure);
-        for(int k = 0; k < 5; ++k) {
-          // printf("BALLI:dry-3:, %.10e, %i\n", dry_aero.int_aero_mmr[0][1](icol,
-          // k),
-          //        k);
-        }
 
         // calculate o3 column densities (first component of col_dens in Fortran
         // code)
         auto o3_col_dens_i = ekat::subview(o3_col_dens, icol);
+#if 0
         impl::compute_o3_column_density(team, atm, progs, invariants_icol,
                                         o3_col_dens_i);
-        for(int k = 0; k < 5; ++k) {
-          // printf("BALLI:dry-4:, %.10e, %i\n", dry_aero.int_aero_mmr[0][1](icol,
-          // k),
-          //        k);
-        }
+
 
         // set up photolysis work arrays for this column.
         mam4::mo_photo::PhotoTableWorkArrays photo_work_arrays_icol;
@@ -942,11 +928,6 @@ void MAMMicrophysics::run_impl(const double dt) {
         //  set work view using 1D photo_work_arrays_icol
         mam4::mo_photo::set_photo_table_work_arrays(
             photo_table, work_photo_table_icol, photo_work_arrays_icol);
-        for(int k = 0; k < 5; ++k) {
-          // printf("BALLI:dry-5:, %.10e, %i\n", dry_aero.int_aero_mmr[0][1](icol,
-          // k),
-          //        k);
-        }
         
         // ... look up photolysis rates from our table
         // NOTE: the table interpolation operates on an entire column of data,
@@ -974,10 +955,9 @@ void MAMMicrophysics::run_impl(const double dt) {
         }
         // compute aerosol microphysics on each vertical level within this
         // column
-#endif        
+#endif
         Kokkos::parallel_for(
             Kokkos::TeamThreadRange(team, nlev), [&](const int k) {
-#if 0              
               // extract atm state variables (input)
               Real temp    = atm.temperature(k);
               Real pmid    = atm.pressure(k);
@@ -994,7 +974,7 @@ void MAMMicrophysics::run_impl(const double dt) {
               // mixing ratios) (in EAM, this is done in the gas_phase_chemdr
               // subroutine defined within
               //  mozart/mo_gas_phase_chemdr.F90)
-#endif
+
               Real q[gas_pcnst]    = {};
               Real qqcw[gas_pcnst] = {};
               // mam_coupling::transfer_prognostics_to_work_arrays(progs, k, q,
@@ -1004,7 +984,6 @@ void MAMMicrophysics::run_impl(const double dt) {
               Real qqcw_long[pcnst] = {};
               mam4::utils::extract_stateq_from_prognostics(progs, atm, state_q,
                                                            k);
-
 
               mam4::utils::extract_qqcw_from_prognostics(progs, qqcw_long, k);
 
@@ -1021,33 +1000,16 @@ void MAMMicrophysics::run_impl(const double dt) {
               // the same ouputs However, in mmr2vmr we do not iterate to get
               // species value. mam_coupling::convert_work_arrays_to_vmr(q,
               // qqcw, vmr, vmrcw);
-              
-              mam_coupling::mmr2vmr(q, adv_mass, vmr);
-
-              //printf("---BALLI:-loop-b:, %.15e,%.15e,%.15e, %.15e,%i\n",
-              //       dry_aero.int_aero_mmr[0][0](icol, k),wet_aero.int_aero_mmr[0][0](icol, k), q[6],vmr[6], k);
-              mam_coupling::mmr2vmr(qqcw, adv_mass, vmrcw);
-              printf("---BALLI:-loop-b:, %.15e,%.15e,%.15e, %.15e,%i\n",
-                     dry_aero.cld_aero_mmr[0][0](icol, k), qqcw[6],vmrcw[6], k);
-              // aerosol/gas species tendencies (output)
-              Real vmr_tendbb[gas_pcnst][nqtendbb]   = {};
-              Real vmrcw_tendbb[gas_pcnst][nqtendbb] = {};
-
-              // create work array copies to retain "pre-chemistry" values
-              Real vmr_pregaschem[gas_pcnst]   = {};
-              Real vmr_precldchem[gas_pcnst]   = {};
-              Real vmrcw_precldchem[gas_pcnst] = {};
-              for(int i = 0; i < gas_pcnst; ++i) {
-                vmr_pregaschem[i]   = vmr[i];
-                vmr_precldchem[i]   = vmr[i];
-                vmrcw_precldchem[i] = vmrcw[i];
-              }
+              // **STARTED**
+              mam_coupling::mmr2vmr(q, adv_mass,  // in
+                                    vmr);         // out
 
               //---------------------
               // Gas Phase Chemistry
               //---------------------
               //
               Real photo_rates_k[mam4::mo_photo::phtcnt];
+#if 0
               for(int i = 0; i < mam4::mo_photo::phtcnt; ++i) {
                 photo_rates_k[i] = photo_rates_icol(k, i);
               }
@@ -1056,16 +1018,28 @@ void MAMMicrophysics::run_impl(const double dt) {
               // for (int i = 0; i < mam4::gas_chemistry::extcnt; ++i) {
               //   extfrc_k[i] = extfrc_icol(k, i);
               // }
+#endif
               const auto &extfrc_k = ekat::subview(extfrc_icol, k);
-
               Real invariants_k[mam4::gas_chemistry::nfs];
               for(int i = 0; i < mam4::gas_chemistry::nfs; ++i) {
                 invariants_k[i] = invariants_icol(k, i);
               }
+              // BALLI- Remove below
+              //  HARDWIRE invariant for this column
+              Real invariants_hardwired[mam4::gas_chemistry::nfs] = {
+                  3.253199825132671E+015, 2.570027861854810E+015,
+                  683171963277861.,       13112546075.5717,
+                  9146.81639897120,       5085.39253522843,
+                  7936.72329095871,       1.08534494964347};
+              for(int i = 0; i < mam4::gas_chemistry::nfs; ++i) {
+                invariants_k[i] = invariants_hardwired[i];
+              }
+              // BALLI- Remove above^^^
 
               impl::gas_phase_chemistry(zm, zi, phis, temp, pmid, pdel, dt,
                                         photo_rates_k, extfrc_k.data(),
                                         invariants_k, vmr);
+#if 0
               printf("---BALLI:-loop-bcbb:, %.10e, %.10e,%i\n",
                      dry_aero.int_aero_mmr[0][1](icol, k), vmr[7], k);
               // printf("BALLI:-loop-1:, %.10e, %i\n",
@@ -1083,6 +1057,11 @@ void MAMMicrophysics::run_impl(const double dt) {
                       // (taken from mam4xx setsox validation test)
               const Real mbar      = haero::Constants::molec_weight_dry_air;
               constexpr int indexm = mam4::gas_chemistry::indexm;
+
+              mam_coupling::mmr2vmr(qqcw, adv_mass, vmrcw);
+              printf("---BALLI:-loop-b:, %.15e,%.15e,%.15e,%i\n",
+                     dry_aero.cld_aero_mmr[0][0](icol, k), qqcw[6],vmrcw[6], k);
+
               mam4::mo_setsox::setsox_single_level(
                   loffset, dt, pmid, pdel, temp, mbar, lwc, cldfrac, cldnum,
                   invariants_k[indexm], config.setsox, vmrcw, vmr);
@@ -1107,6 +1086,21 @@ void MAMMicrophysics::run_impl(const double dt) {
               // printf("BALLI:-loop-3:, %.10e, %.10e, %i\n",
               //        dry_aero.int_aero_mmr[0][1](icol, k),
               //        progs.q_aero_i[0][1](k), k);
+
+              
+              // create work array copies to retain "pre-chemistry" values
+              Real vmr_pregaschem[gas_pcnst]   = {};
+              Real vmr_precldchem[gas_pcnst]   = {};
+              Real vmrcw_precldchem[gas_pcnst] = {};
+              for(int i = 0; i < gas_pcnst; ++i) {
+                vmr_pregaschem[i]   = vmr[i];
+                vmr_precldchem[i]   = vmr[i];
+                vmrcw_precldchem[i] = vmrcw[i];
+              }
+
+              // aerosol/gas species tendencies (output)
+              Real vmr_tendbb[gas_pcnst][nqtendbb]   = {};
+              Real vmrcw_tendbb[gas_pcnst][nqtendbb] = {};
 
               // do aerosol microphysics (gas-aerosol exchange, nucleation,
               // coagulation)

@@ -470,15 +470,26 @@ void gas_phase_chemistry(
   // ... set rates for "tabular" and user specified reactions
   Real reaction_rates[rxntot];
   mam4::gas_chemistry::setrxt(reaction_rates, temp);
+  for(int i = 0; i < rxntot; ++i) {
+    // if(reaction_rates[i]>1e-30)printf("React rates:%e,
+    // %i\n",reaction_rates[i],i);
+  }
 
   // set reaction rates based on chemical invariants
   // (indices (ndxes?) are taken from mam4 validation data and translated from
   // 1-based indices to 0-based indices)
-  int usr_HO2_HO2_ndx = 1, usr_DMS_OH_ndx = 5, usr_SO2_OH_ndx = 3,
-      inv_h2o_ndx = 3;
-  mam4::gas_chemistry::usrrxt(reaction_rates, temp, invariants,
-                              invariants[indexm], usr_HO2_HO2_ndx,
-                              usr_DMS_OH_ndx, usr_SO2_OH_ndx, inv_h2o_ndx);
+  constexpr int usr_HO2_HO2_ndx = 1, usr_DMS_OH_ndx = 5, usr_SO2_OH_ndx = 3,
+                inv_h2o_ndx = 3;
+  mam4::gas_chemistry::usrrxt(reaction_rates,                        // out
+                              temp, invariants, invariants[indexm],  // in
+                              usr_HO2_HO2_ndx, usr_DMS_OH_ndx,
+                              usr_SO2_OH_ndx,  // in
+                              inv_h2o_ndx);    // in
+  for(int i = 0; i < rxntot; ++i) {
+    if(reaction_rates[i] > 1e-30)
+      printf("React rates:%0.15e,%i\n", reaction_rates[i], i);
+  }
+
   mam4::gas_chemistry::adjrxt(reaction_rates, invariants, invariants[indexm]);
 
   //===================================
@@ -532,6 +543,7 @@ void gas_phase_chemistry(
   if(ndx_h2so4 > 0) {
     del_h2so4_gasprod = q[ndx_h2so4] - del_h2so4_gasprod;
   }
+#endif
 }
 
 }  // namespace scream::impl
