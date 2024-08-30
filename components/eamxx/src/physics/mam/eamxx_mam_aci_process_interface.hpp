@@ -133,8 +133,10 @@ class MAMAci final : public scream::AtmosphereProcess {
   // local atmospheric state column variables
   const_view_2d pdel_;       // pressure thickess of layer [Pa]
   view_2d rpdel_;            // Inverse of pdel_
-  const_view_2d w_sec_mid_;  // Vertical velocity variance at midpoints
-  view_2d w_sec_int_;        // Vertical velocity variance at interfaces
+  // const_view_2d w_sec_mid_;  // Vertical velocity variance at midpoints
+  // view_2d w_sec_int_;        // Vertical velocity variance at interfaces
+  const_view_2d tke_mid_;    // Turbulent kinetic energy at midpoints
+  view_2d tke_int_;          // Turbulent kinetic energy at interfaces
 
   // number of horizontal columns and vertical levels
   int ncol_, nlev_;

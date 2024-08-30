@@ -38,10 +38,40 @@ void compute_w0_and_rho(haero::ThreadTeamPolicy team_policy,
       });
 }
 
-void compute_tke_at_interfaces(haero::ThreadTeamPolicy team_policy,
+// void compute_tke_at_interfaces(haero::ThreadTeamPolicy team_policy,
+//                                   const MAMAci::const_view_2d var_mid,
+//                                   const MAMAci::view_2d dz, const int nlev_,
+//                                   MAMAci::view_2d w_sec_int,
+// 				  // output
+// 				  MAMAci::view_2d tke) {
+//   using CO = scream::ColumnOps<DefaultDevice, Real>;
+
+//   Kokkos::parallel_for(
+//       team_policy, KOKKOS_LAMBDA(const haero::ThreadTeam &team) {
+//         const int icol = team.league_rank();
+
+//         const auto var_mid_col = ekat::subview(var_mid, icol);
+//         const auto w_sec_int_col = ekat::subview(w_sec_int, icol);
+//         const auto dz_col      = ekat::subview(dz, icol);
+
+//         const Real bc_top = var_mid_col(0);
+//         const Real bc_bot = var_mid_col(nlev_ - 1);
+
+//         CO::compute_interface_values_linear(team, nlev_, var_mid_col, dz_col,
+//                                             bc_top, bc_bot, w_sec_int_col);
+//         team.team_barrier();
+//         Kokkos::parallel_for(
+//             Kokkos::TeamVectorRange(team, nlev_ + 1),
+//             [&](int kk) {
+// 	      tke(icol, kk) = (3.0 / 2.0) * w_sec_int(icol, kk);
+// 	});
+//       });
+// }
+
+void interpolate_tke_at_interfaces(haero::ThreadTeamPolicy team_policy,
                                   const MAMAci::const_view_2d var_mid,
                                   const MAMAci::view_2d dz, const int nlev_,
-                                  MAMAci::view_2d w_sec_int,
+                                  MAMAci::view_2d tke_int,
 				  // output
 				  MAMAci::view_2d tke) {
   using CO = scream::ColumnOps<DefaultDevice, Real>;
@@ -51,19 +81,19 @@ void compute_tke_at_interfaces(haero::ThreadTeamPolicy team_policy,
         const int icol = team.league_rank();
 
         const auto var_mid_col = ekat::subview(var_mid, icol);
-        const auto w_sec_int_col = ekat::subview(w_sec_int, icol);
+        const auto tke_int_col = ekat::subview(tke_int, icol);
         const auto dz_col      = ekat::subview(dz, icol);
 
         const Real bc_top = var_mid_col(0);
         const Real bc_bot = var_mid_col(nlev_ - 1);
 
         CO::compute_interface_values_linear(team, nlev_, var_mid_col, dz_col,
-                                            bc_top, bc_bot, w_sec_int_col);
+                                            bc_top, bc_bot, tke_int_col);
         team.team_barrier();
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange(team, nlev_ + 1),
             [&](int kk) {
-	      tke(icol, kk) = (3.0 / 2.0) * w_sec_int(icol, kk);
+	      tke(icol, kk) = tke_int(icol, kk);
 	});
       });
 }

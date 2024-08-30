@@ -131,6 +131,9 @@ void MAMAci::set_grids(
 
   // Vertical velocity variance at midpoints
   add_field<Required>("w_variance", scalar3d_layout_mid, m2 / s2, grid_name);
+    
+  // Turbulent kinetic energy at midpoints
+  add_field<Required>("tke", scalar3d_layout_mid, m2 / s2, "tracers", grid_name);
 
   // NOTE: "cldfrac_liq" is updated in SHOC. "cldfrac_liq" in C++ code is
   // equivalent to "alst" in the shoc_intr.F90. In the C++ code, it is used as
@@ -287,7 +290,8 @@ void MAMAci::initialize_impl(const RunType run_type) {
   // ------------------------------------------------------------------------
   // Input fields read in from IC file, namelist or other processes
   // ------------------------------------------------------------------------
-  w_sec_mid_    = get_field_in("w_variance").get_view<const Real **>();
+  // w_sec_mid_    = get_field_in("w_variance").get_view<const Real **>();
+  tke_mid_      = get_field_in("tke").get_view<const Real **>();
   dgnum_        = get_field_in("dgnum").get_view<const Real ***>();
   liqcldf_      = get_field_in("cldfrac_liq").get_view<const Real **>();
   liqcldf_prev_ = get_field_in("cldfrac_liq_prev").get_view<const Real **>();
@@ -501,8 +505,12 @@ void MAMAci::initialize_impl(const RunType run_type) {
   // Eddy diffusivity of heat at the interfaces
   Kokkos::resize(kvh_int_, ncol_, nlev_ + 1);
 
-  // Vertical velocity variance at the interfaces
-  Kokkos::resize(w_sec_int_, ncol_, nlev_ + 1);
+  // // Vertical velocity variance at the interfaces
+  // Kokkos::resize(w_sec_int_, ncol_, nlev_ + 1);
+
+  // Turbulent kinetic energy at the interfaces
+  Kokkos::resize(tke_int_, ncol_, nlev_ + 1);
+    
   // Allocate work arrays
   for(int icnst = 0; icnst < mam4::ndrop::ncnst_tot; ++icnst) {
     qqcw_fld_work_[icnst] = view_2d("qqcw_fld_work_", ncol_, nlev_);
@@ -564,7 +572,11 @@ void MAMAci::run_impl(const double dt) {
                      // output
                      w0_, rho_);
 
-  compute_tke_at_interfaces(team_policy, w_sec_mid_, dry_atm_.dz, nlev_, w_sec_int_,
+  // compute_tke_at_interfaces(team_policy, w_sec_mid_, dry_atm_.dz, nlev_, w_sec_int_,
+  //                           // output
+  //                           tke_);
+
+  interpolate_tke_at_interfaces(team_policy, tke_mid_, dry_atm_.dz, nlev_, tke_int_,
                             // output
                             tke_);
 
