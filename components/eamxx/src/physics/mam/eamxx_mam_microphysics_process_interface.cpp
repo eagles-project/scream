@@ -130,6 +130,24 @@ void MAMMicrophysics::set_grids(
   // At interfaces
   FieldLayout scalar3d_layout_int{{COL, ILEV}, {ncol_, nlev_ + 1}};
 
+  const int nmodes = mam4::AeroConfig::num_modes();  // Number of modes
+  // layout for 3D (ncol, nmodes, nlevs)
+  FieldLayout scalar3d_mid_nmodes =
+      grid_->get_3d_vector_layout(true, nmodes, "nmodes");
+
+  static constexpr auto m3 = m * m * m;
+  // Aerosol dry particle diameter [m]
+  add_field<Required>("dgncur_a", scalar3d_mid_nmodes, m, grid_name);
+
+  // Wet aerosol density [kg/m3]
+  add_field<Required>("wetdens", scalar3d_mid_nmodes, kg / m3, grid_name);
+
+  // Aerosol water [kg/kg]
+  add_field<Required>("qaerwat", scalar3d_mid_nmodes, kg / kg, grid_name);
+
+  // Wet Required diameter [m]
+  add_field<Required>("dgnumwet", scalar3d_mid_nmodes, m, grid_name);
+
   // define fields needed in mam4xx
 
   // atmospheric quantities
@@ -707,12 +725,19 @@ void MAMMicrophysics::run_impl(const double dt) {
   Kokkos::parallel_for("preprocess", scan_policy, preprocess_);
   Kokkos::fence();
 
+  const auto wet_geometric_mean_diameter_i =
+      get_field_in("dgnumwet").get_view<const Real ***>();
+  const auto dry_geometric_mean_diameter_i =
+      get_field_in("dgncur_a").get_view<const Real ***>();
+  const auto qaerwat = get_field_in("qaerwat").get_view<const Real ***>();
+  const auto wetdens = get_field_in("wetdens").get_view<const Real ***>();
+
   // reset internal WSM variables
   // workspace_mgr_.reset_internals();
 
   // NOTE: nothing depends on simulation time (yet), so we can just use zero for
   // now
-  double t = 0.0;
+  // double t = 0.0;
 
 #if 0
   // climatology data for linear stratospheric chemistry
@@ -856,6 +881,13 @@ void MAMMicrophysics::run_impl(const double dt) {
   // FIXME: remove this hard-code value
   const int offset_aerosol = mam4::utils::gasses_start_ind();
 
+  // A note on units: q is kg/kg-dry-air; adv_mass is in g/mole.
+  // Lets convert adv_mass to kg/mole as vmr_from_mmr function uses
+  // molec_weight_dry_air with kg/mole units
+  Real adv_mass_kg_per_moles[gas_pcnst];
+  for(int i = 0; i < gas_pcnst; ++i)
+    adv_mass_kg_per_moles[i] = adv_mass[i] / 1e3;
+
   // loop over atmosphere columns and compute aerosol microphyscs
   Kokkos::parallel_for(
       policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
@@ -874,6 +906,13 @@ void MAMMicrophysics::run_impl(const double dt) {
 
         auto z_iface = ekat::subview(dry_atm.z_iface, icol);
         Real phis    = dry_atm.phis(icol);
+
+        auto wet_diameter_icol =
+            ekat::subview(wet_geometric_mean_diameter_i, icol);
+        auto dry_diameter_icol =
+            ekat::subview(dry_geometric_mean_diameter_i, icol);
+        auto qaerwat_icol = ekat::subview(qaerwat, icol);
+        auto wetdens_icol = ekat::subview(wetdens, icol);
 
         // set surface state data
         haero::Surface sfc{};
@@ -1007,12 +1046,6 @@ void MAMMicrophysics::run_impl(const double dt) {
               // qqcw, vmr, vmrcw);
               // **STARTED**
 
-              // A note on units: q is kg/kg-dry-air; adv_mass is in g/mole.
-              // Lets convert adv_mass to kg/mole as vmr_from_mmr function uses
-              // molec_weight_dry_air with kg/mole units
-              Real adv_mass_kg_per_moles[gas_pcnst];
-              for(int i = 0; i < gas_pcnst; ++i)
-                adv_mass_kg_per_moles[i] = adv_mass[i] / 1e3;
               mam_coupling::mmr2vmr(q, adv_mass_kg_per_moles,  // in
                                     vmr);                      // out
               // for(int i = 0; i < gas_pcnst; ++i) {
@@ -1056,11 +1089,6 @@ void MAMMicrophysics::run_impl(const double dt) {
                                         photo_rates_k,                  // in
                                         extfrc_k.data(), invariants_k,  // in
                                         vmr);                           // out
-#if 0
-              printf("---BALLI:-loop-bcbb:, %.10e, %.10e,%i\n",
-                     dry_aero.int_aero_mmr[0][1](icol, k), vmr[7], k);
-              // printf("BALLI:-loop-1:, %.10e, %i\n",
-              //        dry_aero.int_aero_mmr[0][1](icol, k), k);
 
               //----------------------
               // Aerosol microphysics
@@ -1069,55 +1097,37 @@ void MAMMicrophysics::run_impl(const double dt) {
               // subroutine in eam/src/chemistry/modal_aero/aero_model.F90
 
               // aqueous chemistry ...
-              const int loffset =
-                  8;  // offset of first tracer in work arrays
-                      // (taken from mam4xx setsox validation test)
-              const Real mbar      = haero::Constants::molec_weight_dry_air;
-              constexpr int indexm = mam4::gas_chemistry::indexm;
+              // offset of first tracer in work arrays
+              // (taken from mam4xx setsox validation test)
+              constexpr int loffset = 8;
+              constexpr Real mbar   = haero::Constants::molec_weight_dry_air;
+              constexpr int indexm  = mam4::gas_chemistry::indexm;
 
-              mam_coupling::mmr2vmr(qqcw, adv_mass, vmrcw);
-              printf("---BALLI:-loop-b:, %.15e,%.15e,%.15e,%i\n",
-                     dry_aero.cld_aero_mmr[0][0](icol, k), qqcw[6],vmrcw[6], k);
-
+              // Note that adv_mass_kg_per_moles is used in mmr2vmr as
+              // adv_mass has a units of g/moles and mmr2vmr expects
+              //  units of kg/moles
+              mam_coupling::mmr2vmr(qqcw, adv_mass_kg_per_moles,  // in
+                                    vmrcw);                       // out
+#if 0
               mam4::mo_setsox::setsox_single_level(
                   loffset, dt, pmid, pdel, temp, mbar, lwc, cldfrac, cldnum,
                   invariants_k[indexm], config.setsox, vmrcw, vmr);
-              printf("---BALLI:-loop-bcb:, %.10e, %.10e,%i\n",
-                     dry_aero.int_aero_mmr[0][1](icol, k), vmr[7], k);
-              // printf("BALLI:-loop-2:, %.10e, %.10e, %i\n",
-              //        dry_aero.int_aero_mmr[0][1](icol, k),
-              //        progs.q_aero_i[0][1](k), k);
-
+              
               // calculate aerosol water content using water uptake treatment
               // * dry and wet diameters [m]
               // * wet densities [kg/m3]
               // * aerosol water mass mixing ratio [kg/kg]
-              Real dgncur_a[num_modes]    = {};
-              Real dgncur_awet[num_modes] = {};
-              Real wetdens[num_modes]     = {};
-              Real qaerwat[num_modes]     = {};
+              Real dgncur_a_kk[num_modes]    = {};
+              Real dgncur_awet_kk[num_modes] = {};
+              Real wetdens_kk[num_modes]     = {};
+              Real qaerwat_kk[num_modes]     = {};
 
-              impl::compute_water_content(progs, atm, k, qv, temp, pmid,
-                                          dgncur_a, dgncur_awet, wetdens,
-                                          qaerwat);
-              // printf("BALLI:-loop-3:, %.10e, %.10e, %i\n",
-              //        dry_aero.int_aero_mmr[0][1](icol, k),
-              //        progs.q_aero_i[0][1](k), k);
-
-              
-              // create work array copies to retain "pre-chemistry" values
-              Real vmr_pregaschem[gas_pcnst]   = {};
-              Real vmr_precldchem[gas_pcnst]   = {};
-              Real vmrcw_precldchem[gas_pcnst] = {};
-              for(int i = 0; i < gas_pcnst; ++i) {
-                vmr_pregaschem[i]   = vmr[i];
-                vmr_precldchem[i]   = vmr[i];
-                vmrcw_precldchem[i] = vmrcw[i];
+              for (int imode = 0; imode < num_modes; imode++) {
+                dgncur_awet_kk[imode] = wet_diameter_icol(imode, k);
+                dgncur_a_kk[imode] = dry_diameter_icol(imode, k);
+                qaerwat_kk[imode] = qaerwat_icol(imode, k);
+                wetdens_kk[imode] = wetdens_icol(imode, k);
               }
-
-              // aerosol/gas species tendencies (output)
-              Real vmr_tendbb[gas_pcnst][nqtendbb]   = {};
-              Real vmrcw_tendbb[gas_pcnst][nqtendbb] = {};
 
               // do aerosol microphysics (gas-aerosol exchange, nucleation,
               // coagulation)
@@ -1126,11 +1136,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                   cldfrac, vmr, vmrcw, vmr_pregaschem, vmr_precldchem,
                   vmrcw_precldchem, vmr_tendbb, vmrcw_tendbb, dgncur_a,
                   dgncur_awet, wetdens, qaerwat);
-              printf("---BALLI:-loop-bc:, %.10e, %.10e,%i\n",
-                     dry_aero.int_aero_mmr[0][1](icol, k), vmr[7], k);
-              // printf("BALLI:-loop-4:, %.10e, %.10e, %i\n",
-              //        dry_aero.int_aero_mmr[0][1](icol, k),
-              //        progs.q_aero_i[0][1](k), k);
+              
               //-----------------
               //  LINOZ chemistry
               //-----------------
@@ -1151,9 +1157,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                   chlorine_loading, config.linoz.psc_T, vmr[o3_ndx], do3_linoz,
                   do3_linoz_psc, ss_o3, o3col_du_diag, o3clim_linoz_diag,
                   zenith_angle_degrees);
-              // printf("BALLI:-loop-5:, %.10e, %.10e, %i\n",
-              //        dry_aero.int_aero_mmr[0][1](icol, k),
-              //        progs.q_aero_i[0][1](k), k);
+              
               //  update source terms above the ozone decay threshold
               /*if (k > nlev - config.linoz.o3_lbl - 1) {
                 Real do3_mass; // diagnostic, not needed
@@ -1162,51 +1166,32 @@ void MAMMicrophysics::run_impl(const double dt) {
               }*/
 
               // ... check for negative values and reset to zero
-              printf("---BALLI:-loop-bc:, %.10e, %.10e,%i\n",
-                     dry_aero.int_aero_mmr[0][1](icol, k), vmr[7], k);
               for(int i = 0; i < gas_pcnst; ++i) {
                 if(vmr[i] < 0.0) vmr[i] = 0.0;
               }
-              // printf("BALLI:-loop-6:, %.10e, %.10e, %i\n",
-              //        dry_aero.int_aero_mmr[0][1](icol, k),
-              //        progs.q_aero_i[0][1](k), k);
+              
               //----------------------
               //  Dry deposition (gas)
               //----------------------
 
               // FIXME: C++ port in progress!
               // mam4::drydep::drydep_xactive(...);
-              printf("---BALLI:-loop-c:, %.10e, %.10e,%i\n",
-                     dry_aero.int_aero_mmr[0][1](icol, k), vmr[7], k);
-              mam_coupling::vmr2mmr(vmr, adv_mass, q);
-              printf("---BALLI:-loop-d:, %.10e, %.10e,%i\n",
-                     dry_aero.int_aero_mmr[0][1](icol, k), q[7], k);
-              mam_coupling::vmr2mmr(vmrcw, adv_mass, qqcw);
-              // printf("BALLI:-loop-7:, %.10e, %.10e, %i\n",
-              //        dry_aero.int_aero_mmr[0][1](icol, k),
-              //        progs.q_aero_i[0][1](k), k);
+              mam_coupling::vmr2mmr(vmr, adv_mass_kg_per_moles, q);
+              mam_coupling::vmr2mmr(vmrcw, adv_mass_kg_per_moles, qqcw);
+
 
               for(int i = offset_aerosol; i < pcnst; ++i) {
                 state_q[i]   = q[i - offset_aerosol];
                 qqcw_long[i] = qqcw[i - offset_aerosol];
               }
               mam4::utils::inject_stateq_to_prognostics(state_q, progs, k);
-              // printf("BALLI:-loop-8:, %.10e, %.10e, %i\n",
-              //        dry_aero.int_aero_mmr[0][1](icol, k),
-              //        progs.q_aero_i[0][1](k), k);
-              //            std::cout << "state_q: ";
-              //  for (int i = 0; i < pcnst; ++i) {
-              //      std::cout << state_q[i] << " ";
-              //  }
-              //  std::cout << std::endl;
-
               mam4::utils::inject_qqcw_to_prognostics(qqcw_long, progs, k);
-              // transfer updated prognostics from work arrays
-              // mam_coupling::convert_work_arrays_to_mmr(vmr, vmrcw, q, qqcw);
-              // mam_coupling::transfer_work_arrays_to_prognostics(q, qqcw,
-              // progs, k);
-              // printf("BALLI:-loop-9:, %.10e, %i\n",
-              //       dry_aero.int_aero_mmr[0][1](icol, k), k);
+      // transfer updated prognostics from work arrays
+      // mam_coupling::convert_work_arrays_to_mmr(vmr, vmrcw, q, qqcw);
+      // mam_coupling::transfer_work_arrays_to_prognostics(q, qqcw,
+      // progs, k);
+      // printf("BALLI:-loop-9:, %.10e, %i\n",
+      //       dry_aero.int_aero_mmr[0][1](icol, k), k);
 #endif
             });
       });
