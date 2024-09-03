@@ -694,6 +694,7 @@ void MAMMicrophysics::run_impl(const double dt) {
   // const auto scan_policy = ekat::ExeSpaceUtils<
   //     KT::ExeSpace>::get_thread_range_parallel_scan_team_policy(ncol_,
   //     nlev_);
+
   const auto scan_policy = ekat::ExeSpaceUtils<
       KT::ExeSpace>::get_thread_range_parallel_scan_team_policy(1, nlev_);
   // const auto policy =
@@ -712,6 +713,7 @@ void MAMMicrophysics::run_impl(const double dt) {
   // NOTE: nothing depends on simulation time (yet), so we can just use zero for
   // now
   double t = 0.0;
+
 #if 0
   // climatology data for linear stratospheric chemistry
   auto linoz_o3_clim = buffer_.scratch[0];  // ozone (climatology) [vmr]
@@ -785,6 +787,7 @@ void MAMMicrophysics::run_impl(const double dt) {
     i++;
   }
 #endif
+ 
   const_view_1d &col_latitudes  = col_latitudes_;
   const_view_1d &col_longitudes = col_longitudes_;
 
@@ -909,9 +912,9 @@ void MAMMicrophysics::run_impl(const double dt) {
           cnst_offline_icol[i] = ekat::subview(cnst_offline[i], icol);
         }
 
-        mam4::mo_setinv::setinv(team, invariants_icol, atm.temperature,
-                                atm.vapor_mixing_ratio, cnst_offline_icol,
-                                atm.pressure);
+        //mam4::mo_setinv::setinv(team, invariants_icol, atm.temperature,
+        //                        atm.vapor_mixing_ratio, cnst_offline_icol,
+        //                        atm.pressure);
 
         // calculate o3 column densities (first component of col_dens in Fortran
         // code)
@@ -938,7 +941,7 @@ void MAMMicrophysics::run_impl(const double dt) {
             shr_orb_cosz_c2f(calday, rlats, rlons, delta,
                              dt);  // what's the aerosol microphys frequency?
         zenith_angle = acos(zenith_angle);
-        printf("zenith_angle:%.10e\n", zenith_angle);
+        //printf("zenith_angle:%.10e\n", zenith_angle);
 #if 0
         Real surf_albedo = d_sfc_alb_dir_vis(icol);
 
@@ -958,6 +961,8 @@ void MAMMicrophysics::run_impl(const double dt) {
 #endif
         Kokkos::parallel_for(
             Kokkos::TeamThreadRange(team, nlev), [&](const int k) {
+              printf("");
+              printf("Level:%i\n",k);
               // extract atm state variables (input)
               Real temp    = atm.temperature(k);
               Real pmid    = atm.pressure(k);
@@ -989,8 +994,8 @@ void MAMMicrophysics::run_impl(const double dt) {
 
               for(int i = offset_aerosol; i < pcnst; ++i) {
                 q[i - offset_aerosol] = state_q[i];
-                // printf("BALLI:-loop-aa:, %.10e, %.10e,%i\n",
-                // dry_aero.int_aero_mmr[0][1](icol,k),q[i-offset_aerosol],k);
+                // printf("BALLI:-loop-aa:, %.15e,%i\n",
+                // q[i-offset_aerosol],i - offset_aerosol);
                 qqcw[i - offset_aerosol] = qqcw_long[i];
               }
               // convert mass mixing ratios to volume mixing ratios (VMR),
@@ -1001,8 +1006,19 @@ void MAMMicrophysics::run_impl(const double dt) {
               // species value. mam_coupling::convert_work_arrays_to_vmr(q,
               // qqcw, vmr, vmrcw);
               // **STARTED**
-              mam_coupling::mmr2vmr(q, adv_mass,  // in
-                                    vmr);         // out
+
+              // A note on units: q is kg/kg-dry-air; adv_mass is in g/mole.
+              // Lets convert adv_mass to kg/mole as vmr_from_mmr function uses
+              // molec_weight_dry_air with kg/mole units
+              Real adv_mass_kg_per_moles[gas_pcnst];
+              for(int i = 0; i < gas_pcnst; ++i)
+                adv_mass_kg_per_moles[i] = adv_mass[i] / 1e3;
+              mam_coupling::mmr2vmr(q, adv_mass_kg_per_moles,  // in
+                                    vmr);                      // out
+              // for(int i = 0; i < gas_pcnst; ++i) {
+              // printf("BALLI:-loop-bb:, %.15e,%.15e,%.15e,%i\n", vmr[i], q[i],
+              //        adv_mass[i], i);
+              //}
 
               //---------------------
               // Gas Phase Chemistry
@@ -1192,13 +1208,10 @@ void MAMMicrophysics::run_impl(const double dt) {
               //       dry_aero.int_aero_mmr[0][1](icol, k), k);
 #endif
             });
-        for(int k = 0; k < 5; ++k) {
-          // printf("BALLI:dry-END:, %.10e, %i\n",
-          //        dry_aero.int_aero_mmr[0][1](icol, k), k);
-        }
+      
       });
   // postprocess output
-  Kokkos::parallel_for("postprocess", policy, postprocess_);
+  //Kokkos::parallel_for("postprocess", policy, postprocess_);  
   Kokkos::fence();
 }
 

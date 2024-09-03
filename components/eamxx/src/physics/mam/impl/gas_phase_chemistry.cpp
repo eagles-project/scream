@@ -486,33 +486,35 @@ void gas_phase_chemistry(
                               usr_HO2_HO2_ndx, usr_DMS_OH_ndx,       // in
                               usr_SO2_OH_ndx,                        // in
                               inv_h2o_ndx);                          // in
-  for(int i = 0; i < rxntot; ++i) {
-    if(reaction_rates[i] > 1e-30)
-      printf("React rates-usr:%0.15e,%i\n", reaction_rates[i], i);
-  }
+  // for(int i = 0; i < rxntot; ++i) {
+  // if(reaction_rates[i] > 1e-30)
+  // printf("React rates-usr:%0.15e,%i\n", reaction_rates[i], i);
+  //}
 
   mam4::gas_chemistry::adjrxt(reaction_rates,                   // out
                               invariants, invariants[indexm]);  // in
   for(int i = 0; i < rxntot; ++i) {
     if(reaction_rates[i] > 1e-30) {
-      printf("React rates-adj:%0.15e,%i\n", reaction_rates[i], i);
+      // printf("React rates-adj:%0.15e,%i\n", reaction_rates[i], i);
     }
   }
-#if 0
+
   //===================================
   // Photolysis rates at time = t(n+1)
   //===================================
 
   // compute the rate of change from forcing
   Real extfrc_rates[extcnt];  // [1/cm^3/s]
+#if 0
   for(int mm = 0; mm < extcnt; ++mm) {
     if(mm != synoz_ndx) {
       extfrc_rates[mm] = extfrc[mm] / invariants[indexm];
     }
   }
-
+#endif
   // ... Form the washout rates
   Real het_rates[gas_pcnst];
+
   // FIXME: not ported yet
   // sethet(het_rates, pmid, zmid, phis, temp, cmfdqr, prain, nevapr, delt,
   //       invariants[indexm], q);
@@ -523,13 +525,13 @@ void gas_phase_chemistry(
   //===========================
   // Class solution algorithms
   //===========================
-
+#if 0
   // copy photolysis rates into reaction_rates (assumes photolysis rates come
   // first)
   for(int i = 0; i < phtcnt; ++i) {
     reaction_rates[i] = photo_rates[i];
   }
-
+#endif
   // ... solve for "Implicit" species
   bool factor[itermax];
   for(int i = 0; i < itermax; ++i) {
@@ -542,15 +544,38 @@ void gas_phase_chemistry(
 
   // solve chemical system implicitly
   Real prod_out[clscnt4], loss_out[clscnt4];
-  mam4::gas_chemistry::imp_sol(q, reaction_rates, het_rates, extfrc_rates, dt,
-                               permute_4, clsmap_4, factor, epsilon, prod_out,
-                               loss_out);
+  // FIXME: BALLI- Hardwired
+
+  Real reaction_rates_temp[rxntot] = {
+      9.104338380173147e-5,   3.224643980505020e-20,  1.484624814175373e-008,
+      1.122331157995297e-011, 3.757649339501133e-008, 2.135050417619732e-011,
+      6.371543123107133e-009};
+
+  for(int i = 0; i < rxntot; ++i) {
+    reaction_rates[i] = reaction_rates_temp[i];
+  }
+  het_rates[gas_pcnst] = {0};
+  for(int i = 0; i < extcnt; ++i) {
+    extfrc_rates[i] = 0;
+  }
+  for(int i = 0; i < 3; ++i) {
+    printf("q-before_imp:%0.15e,%i\n", q[i], i);
+  }
+  mam4::gas_chemistry::imp_sol(q,                                        // out
+                               reaction_rates, het_rates, extfrc_rates,  // in
+                               dt,                                       // in
+                               permute_4, clsmap_4, factor, epsilon,     // in
+                               prod_out, loss_out);                      // out
+  for(int i = 0; i < 3; ++i) {
+    printf("q-aft_imp:%0.15e,%i\n", q[i], i);
+  }
+  printf("\n");
 
   // save h2so4 change by gas phase chem (for later new particle nucleation)
   if(ndx_h2so4 > 0) {
     del_h2so4_gasprod = q[ndx_h2so4] - del_h2so4_gasprod;
   }
-#endif
+  printf("del_h2so4_gasprod:%0.15e\n", del_h2so4_gasprod);
 }
 
 }  // namespace scream::impl

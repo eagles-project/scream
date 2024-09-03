@@ -12,7 +12,7 @@ CreateADUnitTest(${TEST_BASE_NAME}
 )
 
 # Set AD configurable options
-set (ATM_TIME_STEP 1800)
+set (ATM_TIME_STEP 3600)
 SetVarDependingOnTestSize(NUM_STEPS 1 1 1)  # 1h 2.5h 24h
 set (RUN_T0 2021-10-12-45000)
 
