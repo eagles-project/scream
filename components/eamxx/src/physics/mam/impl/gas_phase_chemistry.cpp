@@ -409,7 +409,7 @@ mam4::mo_photo::PhotoTableData read_photo_table(const ekat::Comm& comm,
 // atmospheric column
 KOKKOS_INLINE_FUNCTION
 void gas_phase_chemistry(
-    Real zm, Real zi, Real phis, Real temp, Real pmid, Real pdel, Real dt,
+    Real phis, Real temp, Real pmid, Real dt,        // in
     const Real photo_rates[mam4::mo_photo::phtcnt],  // in
     const Real extfrc[mam4::gas_chemistry::extcnt],  // in
     Real invariants[mam4::gas_chemistry::nfs],       // in
@@ -516,8 +516,9 @@ void gas_phase_chemistry(
   Real het_rates[gas_pcnst];
 
   // FIXME: not ported yet
-  // sethet(het_rates, pmid, zmid, phis, temp, cmfdqr, prain, nevapr, delt,
-  //       invariants[indexm], q);
+  // sethet(het_rates, //out
+  // pmid, zmid, phis, temp, cmfdqr, prain, nevapr, delt, //in
+  // invariants[indexm], q); //in
 
   // save h2so4 before gas phase chem (for later new particle nucleation)
   Real del_h2so4_gasprod = q[ndx_h2so4];
