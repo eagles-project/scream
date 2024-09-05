@@ -55,6 +55,9 @@ KOKKOS_INLINE_FUNCTION constexpr int iqtend_coag() { return 3; }
 KOKKOS_INLINE_FUNCTION constexpr int iqtend_cond_only() { return 4; }
 KOKKOS_INLINE_FUNCTION constexpr int iqqcwtend_rnam() { return 0; }
 KOKKOS_INLINE_FUNCTION constexpr int maxsubarea() { return 2; }
+// In state_q, we have 40 species, the gasses and aerosols starts after the
+//  9th index, so loffset is 9
+KOKKOS_INLINE_FUNCTION constexpr int loffset() { return 9; }
 
 // conversion factors
 KOKKOS_INLINE_FUNCTION Real fcvt_gas(int gas_id) {
@@ -78,14 +81,14 @@ KOKKOS_INLINE_FUNCTION constexpr int lmapcc_val_aer() { return 2; }
 KOKKOS_INLINE_FUNCTION constexpr int lmapcc_val_num() { return 3; }
 KOKKOS_INLINE_FUNCTION int lmapcc_all(int index) {
   static const int lmapcc_all_[gas_pcnst()] = {
-      lmapcc_val_nul(), lmapcc_val_gas(), lmapcc_val_nul(), lmapcc_val_nul(),
-      lmapcc_val_gas(), lmapcc_val_aer(), lmapcc_val_aer(), lmapcc_val_aer(),
-      lmapcc_val_aer(), lmapcc_val_aer(), lmapcc_val_aer(), lmapcc_val_aer(),
-      lmapcc_val_num(), lmapcc_val_aer(), lmapcc_val_aer(), lmapcc_val_aer(),
-      lmapcc_val_aer(), lmapcc_val_num(), lmapcc_val_aer(), lmapcc_val_aer(),
+      lmapcc_val_nul(), lmapcc_val_nul(), lmapcc_val_gas(), lmapcc_val_nul(),
+      lmapcc_val_nul(), lmapcc_val_gas(), lmapcc_val_aer(), lmapcc_val_aer(),
       lmapcc_val_aer(), lmapcc_val_aer(), lmapcc_val_aer(), lmapcc_val_aer(),
       lmapcc_val_aer(), lmapcc_val_num(), lmapcc_val_aer(), lmapcc_val_aer(),
-      lmapcc_val_aer(), lmapcc_val_num()};
+      lmapcc_val_aer(), lmapcc_val_aer(), lmapcc_val_num(), lmapcc_val_aer(),
+      lmapcc_val_aer(), lmapcc_val_aer(), lmapcc_val_aer(), lmapcc_val_aer(),
+      lmapcc_val_aer(), lmapcc_val_aer(), lmapcc_val_num(), lmapcc_val_aer(),
+      lmapcc_val_aer(), lmapcc_val_aer(), lmapcc_val_num()};
   return lmapcc_all_[index];
 }
 
@@ -154,6 +157,358 @@ void subarea_partition_factors(
 }
 
 KOKKOS_INLINE_FUNCTION
+void setup_subareas(const Real cld,                          // in
+                    int &nsubarea, int &ncldy_subarea,       // out
+                    int &jclea, int &jcldy,                  // out
+                    bool (&iscldy_subarea)[(maxsubarea())],  // out
+                    Real (&afracsub)[maxsubarea()],          // out
+                    Real &fclea, Real &fcldy)                // out
+{
+  //--------------------------------------------------------------------------------------
+  // Purpose: Determine the number of sub-areas and their fractional areas.
+  //          Assign values to some bookkeeping variables.
+  //--------------------------------------------------------------------------------------
+
+  // cld: cloud fraction in the grid cell [unitless]
+  // nsubarea: total # of subareas to do calculations for
+  // ncldy_subarea: total # of cloudy subareas
+  // jclea, jcldy: indices of the clear and cloudy subareas
+  // iscldy_subarea(maxsubarea): whether a subarea is cloudy
+  // afracsub(maxsubarea): area fraction of each active subarea[unitless]
+  // fclea, fcldy: area fraction of clear/cloudy subarea [unitless]
+
+  // BAD CONSTANT
+  //  Cloud chemistry is only active when cld(i,k) >= 1.0e-5_wp
+  //  It may be that the macrophysics has a higher threshold than this
+  constexpr Real fcld_locutoff = 1.0e-5;
+
+  // BAD CONSTANT
+  //  Grid cells with cloud fraction larger than this cutoff is considered to be
+  //  overcast
+  constexpr Real fcld_hicutoff = 0.999;
+
+  // if cloud fraction ~= 0, the grid-cell has a single clear  sub-area
+  // (nsubarea = 1) if cloud fraction ~= 1, the grid-cell has a single cloudy
+  // sub-area (nsubarea = 1) otherwise, the grid-cell has a clear and a cloudy
+  // sub-area (nsubarea = 2)
+
+  if(cld < fcld_locutoff) {
+    fcldy         = 0;
+    nsubarea      = 1;
+    ncldy_subarea = 0;
+    jclea         = 1;
+    jcldy         = 0;
+  } else if(cld > fcld_hicutoff) {
+    fcldy         = 1;
+    nsubarea      = 1;
+    ncldy_subarea = 1;
+    jclea         = 0;
+    jcldy         = 1;
+  } else {
+    fcldy         = cld;
+    nsubarea      = 2;
+    ncldy_subarea = 1;
+    jclea         = 1;
+    jcldy         = 2;
+  }
+
+  fclea = 1.0 - fcldy;
+
+  // Set up a logical array to indicate whether the subareas are clear or cloudy
+  // and init area fraction array
+  for(int jsub = 0; jsub < maxsubarea(); ++jsub) {
+    iscldy_subarea[jsub] = false;
+    afracsub[jsub]       = 0;
+  }
+
+  if(jcldy > 0) iscldy_subarea[jcldy] = true;
+
+  // Save the area fractions to an array
+  if(jclea > 0) afracsub[jclea] = fclea;
+  if(jcldy > 0) afracsub[jcldy] = fcldy;
+
+}  // setup_subareas
+
+KOKKOS_INLINE_FUNCTION
+void set_subarea_rh(const int &ncldy_subarea, const int &jclea,  // in
+                    const int &jcldy,                            // in
+                    const Real (&afracsub)[maxsubarea()],        // in
+                    const Real &relhumgcm,                       // in
+                    Real (&relhumsub)[maxsubarea()])             // out
+{
+  //----------------------------------------------------------------------------
+  // Purpose: Set relative humidity in subareas.
+  //----------------------------------------------------------------------------
+
+  // ncldy_subarea         :# of cloudy subareas
+  // jclea, jcldy          :indices of clear and cloudy subareas
+  // afracsub(maxsubarea)  :area fraction in subareas [unitless]
+  // relhumgcm             :grid cell mean relative humidity [unitless]
+  // relhumsub(maxsubarea): relative humidity in subareas [unitless]
+
+  if(ncldy_subarea <= 0) {
+    // Entire grid cell is cloud-free. RH in subarea = grid cell mean.
+    for(int jsub = 0; jsub < maxsubarea(); ++jsub) relhumsub[jsub] = relhumgcm;
+  } else {
+    // Grid cell has a cloudy subarea. Set RH in that part to 1.0.
+    relhumsub[jcldy] = 1;
+
+    // If the grid cell also has a clear portion, back out the subarea RH from
+    // the grid-cell mean RH and cloud fraction.
+    if(jclea > 0) {
+      Real relhum_tmp  = (relhumgcm - afracsub[jcldy]) / afracsub[jclea];
+      relhumsub[jclea] = mam4::utils::min_max_bound(0, 1, relhum_tmp);
+    }
+  }
+}  // set_subarea_rh
+
+KOKKOS_INLINE_FUNCTION
+void compute_qsub_from_gcm_and_qsub_of_other_subarea(
+    const bool *lcompute[gas_pcnst()], const Real &f_a, const Real &f_b,  // in
+    const Real *qgcm[gas_pcnst()],                                        // in
+    Real (
+        &qsub_a)[gas_pcnst()][2],  // FIXME: REMOVE HARDWIRED 2 from two places
+    Real (&qsub_b)[gas_pcnst()][2])  // inout
+{
+  //-----------------------------------------------------------------------------------------
+  // Purpose: Calculate the value of qsub_b assuming qgcm is a weighted average
+  // defined as
+  //          qgcm = f_a*qsub_a + f_b*qsub_b.
+  //-----------------------------------------------------------------------------------------
+
+  // f_a, f_b      // area fractions [unitless] of subareas
+  // qgcm(ncnst)   // grid cell mean (known)
+  // qsub_a(ncnst) // value in subarea A (known, but might get adjusted)
+  // qsub_b(ncnst) // value in subarea B (to be calculated here)
+
+  for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+    if(lcompute[icnst]) {
+#if 0
+      // Calculate qsub_b
+      // FIXME add assert for f_b not equals zero
+      qsub_b[icnst] = (qgcm[icnst] - f_a * qsub_a[icnst]) / f_b;
+
+      // Check that this does not produce a negative value.
+      // If so, set qsub_b to zero and adjust the value of qsub_a.
+
+      if(qsub_b[icnst] < 0) {
+        qsub_b[icnst] = 0;
+        // FIXME add assert for f_a not equals zero
+        qsub_a[icnst] = qgcm[icnst] / f_a;
+
+    }
+#endif
+    }
+  }
+}  // compute_qsub_from_gcm_and_qsub_of_other_subarea
+
+KOKKOS_INLINE_FUNCTION
+void set_subarea_gases_and_aerosols(
+    const int &nsubarea, const int &jclea,                               // in
+    const int &jcldy,                                                    // in
+    const Real &fclea, const Real &fcldy,                                // in
+    const Real (&qgcm1)[gas_pcnst()], const Real (&qgcm2)[gas_pcnst()],  // in
+    const Real (&qqcwgcm2)[gas_pcnst()],                                 // in
+    const Real (&qgcm3)[gas_pcnst()],                                    // in
+    const Real (&qqcwgcm3)[gas_pcnst()],                                 // in
+    Real (&qsub1)[gas_pcnst()][maxsubarea()],                            // out
+    Real (&qsub2)[gas_pcnst()][maxsubarea()],                            // out
+    Real (&qqcwsub2)[gas_pcnst()][maxsubarea()],                         // out
+    Real (&qsub3)[gas_pcnst()][maxsubarea()],                            // out
+    Real (&qqcwsub3)[gas_pcnst()][maxsubarea()])                         // out
+{
+  //------------------------------------------------------------------------------------------------
+  // Purpose: Partition grid cell mean mixing ratios to clear/cloudy subareas.
+  //------------------------------------------------------------------------------------------------
+  // FIXME: Remove the use staements
+  // use cam_abortutils,              only: endrun
+  // use modal_aero_amicphys_control, only: lmapcc_all, lmapcc_val_gas
+
+  // nsubarea: # of active subareas in the current grid cell
+  // jclea, jcldy: indices of the clear and cloudy subareas
+  // fclea, fcldy: area fractions of the clear and cloudy subareas [unitless]
+
+  // The next set of argument variables are tracer mixing ratios.
+  //  - The units are different for gases, aerosol number, and aerosol mass. The
+  //  exact units do not
+  //    matter for this subroutine, as long as the grid cell mean values ("gcm")
+  //    and the corresponding subarea values ("sub") have the same units.
+  //  - q* and qqcw* are correspond to the interstitial and cloud-borne species,
+  //  respectively
+  //  - The numbers 1-3 correspond to different locations in the host model's
+  //  time integration loop.
+
+  // Grid cell mean mixing ratios
+  // qgcm1(ncnst), qgcm2(ncnst), qqcwgcm2(ncnst), qgcm3(ncnst), qqcwgcm3(ncnst)
+
+  // Subarea mixing ratios
+  // qsub1(ncnst,maxsubarea), qsub2(ncnst,maxsubarea), qsub3(ncnst,maxsubarea),
+  // qqcwsub2(ncnst,maxsubarea) qqcwsub3(ncnst,maxsubarea)
+  //----
+
+  //------------------------------------------------------------------------------------
+  // Initialize mixing ratios in subareas before the aerosol microphysics
+  // calculations
+  //------------------------------------------------------------------------------------
+  for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+    for(int jsub = 0; jsub < maxsubarea(); ++jsub) {
+      // Gases and interstitial aerosols
+      qsub1[icnst][jsub] = 0;
+      qsub2[icnst][jsub] = 0;
+      qsub3[icnst][jsub] = 0;
+
+      // Cloud-borne aerosols
+      qqcwsub2[icnst][jsub] = 0;
+      qqcwsub3[icnst][jsub] = 0;
+    }
+  }
+  //---------------------------------------------------------------------------------------------------
+  // Determine which category the current grid cell belongs to: partly cloudy,
+  // all cloudy, or all clear
+  //---------------------------------------------------------------------------------------------------
+  const bool grid_cell_has_only_clea_area =
+      ((jclea == 1) && (jcldy == 0) && (nsubarea == 1));
+  const bool grid_cell_has_only_cldy_area =
+      ((jclea == 0) && (jcldy == 1) && (nsubarea == 1));
+  const bool gird_cell_is_partly_cldy =
+      (jclea > 0) && (jcldy > 0) && (jclea + jcldy == 3) && (nsubarea == 2);
+
+  // Sanity check
+  if((!grid_cell_has_only_clea_area) && (!grid_cell_has_only_cldy_area) &&
+     (!gird_cell_is_partly_cldy)) {
+    // FIXME: Ensure that EKAT_KERNEL_ASSERT_MSG works in non-debug run
+    EKAT_KERNEL_ASSERT_MSG(true,
+                           "Error! modal_aero_amicphys - bad jclea, jcldy, "
+                           "nsubarea, jclea, jcldy, nsubarea\n");
+  }
+
+  //*************************************************************************************************
+  // Category I: grid cell is either all clear or all cloudy. Copy the grid cell
+  // mean values.
+  //*************************************************************************************************
+  if(grid_cell_has_only_clea_area || grid_cell_has_only_cldy_area) {
+    constexpr int jsub = 1;
+    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+      // copy all gases and aerosols
+      if(lmapcc_all(icnst) > 0) {
+        qsub1[icnst][jsub] = qgcm1[icnst];
+        qsub2[icnst][jsub] = qgcm2[icnst];
+        qsub3[icnst][jsub] = qgcm3[icnst];
+
+        qqcwsub2[icnst][jsub] = qqcwgcm2[icnst];
+        qqcwsub3[icnst][jsub] = qqcwgcm3[icnst];
+      }
+    }
+  }
+  //*************************************************************************************************
+  // Category II: partly cloudy grid cell. Tracer mixing ratios are generally
+  // assumed different in clear and cloudy subareas.  This is primarily
+  // because the interstitial aerosol mixing ratios are assumed to be lower
+  // in the cloudy sub-area than in the clear sub-area, as much of the
+  // aerosol is activated in the cloudy sub-area.
+  //*************************************************************************************************
+  else if(gird_cell_is_partly_cldy) {
+    //===================================
+    // Set gas mixing ratios in subareas
+    //===================================
+    //------------------------------------------------------------------------------------------
+    // Before gas chemistry, gas mixing ratios are assumed to be the same in
+    // all subareas, i.e., they all equal the grid cell mean.
+    //------------------------------------------------------------------------------------------
+    bool cnst_is_gas[gas_pcnst()] = {};
+    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+      cnst_is_gas[icnst] = (lmapcc_all(icnst) == lmapcc_val_gas());
+    }
+
+    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+      if(cnst_is_gas[icnst]) {
+        for(int jsub = 0; jsub < nsubarea; ++jsub) {
+          qsub1[icnst][jsub] = qgcm1[icnst];
+        }
+      }
+    }
+
+    //------------------------------------------------------------------------------------------
+    // After gas chemistry, still assume gas mixing ratios are the same in all
+    // subareas.
+    //------------------------------------------------------------------------------------------
+
+    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+      if(cnst_is_gas[icnst]) {
+        for(int jsub = 0; jsub < nsubarea; ++jsub) {
+          qsub2[icnst][jsub] = qgcm2[icnst];
+        }
+      }
+    }
+
+    //----------------------------------------------------------------------------------------
+    // After cloud chemistry, gas and aerosol mass mixing ratios in the clear
+    // subarea are assumed to be the same as their values before cloud chemistry
+    // (because by definition, cloud chemistry did not happen in clear sky),
+    // while the mixing ratios in the cloudy subarea likely have changed.
+    //----------------------------------------------------------------------------------------
+    // Gases in the clear subarea remain the same as their values before cloud
+    // chemistry.
+    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+      if(cnst_is_gas[icnst]) {
+        qsub3[icnst][jclea] = qsub2[icnst][jclea];
+      }
+    }
+
+    // Calculate the gas mixing ratios in the cloudy subarea using the grid-cell
+    // mean, cloud fraction and the clear-sky values
+#if 0
+     call compute_qsub_from_gcm_and_qsub_of_other_subarea( cnst_is_gas, fclea, fcldy, qgcm3, &// in
+                                                           qsub3(:,jclea), qsub3(:,jcldy)    )// inout
+
+     //=========================================================================
+     // Set AEROSOL mixing ratios in subareas.
+     // Only need to do this for points 2 and 3 in the time integraion loop,
+     // i.e., the before-cloud-chem and after-cloud-chem states.
+     //=========================================================================
+     // Cloud-borne aerosols. (They are straightforward to partition, 
+     // as they only exist in the cloudy subarea.)
+     //----------------------------------------------------------------------------------------
+     // Partition mass and number before cloud chemistry
+
+     call set_subarea_qnumb_for_cldbrn_aerosols( loffset, jclea, jcldy, fcldy, qqcwgcm2, qqcwsub2 )
+     call set_subarea_qmass_for_cldbrn_aerosols( loffset, jclea, jcldy, fcldy, qqcwgcm2, qqcwsub2 )
+
+     // Partition mass and number before cloud chemistry
+
+     call set_subarea_qnumb_for_cldbrn_aerosols( loffset, jclea, jcldy, fcldy, qqcwgcm3, qqcwsub3 )
+     call set_subarea_qmass_for_cldbrn_aerosols( loffset, jclea, jcldy, fcldy, qqcwgcm3, qqcwsub3 )
+
+     //----------------------------------------------------------------------------------------
+     // Interstitial aerosols. (They can exist in both cloudy and clear subareas, and hence 
+     // need to be partitioned.)
+     //----------------------------------------------------------------------------------------
+     // Partition mass and number before cloud chemistry
+
+     call set_subarea_qnumb_for_intrst_aerosols( loffset, jclea, jcldy, fclea, fcldy, &// in
+                                                 qgcm2, qqcwgcm2,                     &// in
+                                                 qgcm2, qsub2                         )// in, inout
+
+     call set_subarea_qmass_for_intrst_aerosols( loffset, jclea, jcldy, fclea, fcldy, &// in
+                                                 qgcm2, qqcwgcm2,                     &// in
+                                                 qgcm2, qsub2                         )// in, inout
+
+     // Partition mass and number before cloud chemistry
+
+     call set_subarea_qnumb_for_intrst_aerosols( loffset, jclea, jcldy, fclea, fcldy, &// in
+                                                 qgcm2, qqcwgcm2,                     &// in
+                                                 qgcm3, qsub3                         )// in, inout
+
+     call set_subarea_qmass_for_intrst_aerosols( loffset, jclea, jcldy, fclea, fcldy, &// in
+                                                 qgcm2, qqcwgcm2,                     &// in
+                                                 qgcm3, qsub3                         )// in, inout
+
+  end if // different categories
+#endif
+  }  // category ifs
+}  // set_subarea_gases_and_aerosols
+
+KOKKOS_INLINE_FUNCTION
 void construct_subareas_1gridcell(
     const Real cld,                           // in
     const Real relhumgcm,                     // in
@@ -181,9 +536,9 @@ void construct_subareas_1gridcell(
     Real qqcwsub1[gas_pcnst()][maxsubarea()],  // out cloud-borne
     Real qqcwsub2[gas_pcnst()][maxsubarea()],  // out cloud-borne
     Real qqcwsub3[gas_pcnst()][maxsubarea()],  // outcloud-borne
-    Real
-        qaerwatsub3[AeroConfig::num_modes()]
-                   [maxsubarea()],  // out aerosol water mixing ratios (mol/mol)
+    Real qaerwatsub3[AeroConfig::num_modes()]
+                    [maxsubarea()],        // out aerosol water mixing ratios
+                                           // (mol/mol)
     Real qaerwat[AeroConfig::num_modes()]  // in  aerosol water mixing ratio
                                            // (kg/kg, NOT mol/mol)
 ) {
@@ -260,9 +615,9 @@ void construct_subareas_1gridcell(
 
   // ----------------------------------------------------------------------------
   //  Copy grid cell mean mixing ratios.
-  //  These values, together with cloud fraction and a few assumptions, are used
-  //  in the remainder of the subroutine to calculate the sub-area mean mixing
-  //  ratios.
+  //  These values, together with cloud fraction and a few assumptions, are
+  //  used in the remainder of the subroutine to calculate the sub-area mean
+  //  mixing ratios.
   // ----------------------------------------------------------------------------
   //  Interstitial aerosols
   Real qgcm1[gas_pcnst()], qgcm2[gas_pcnst()], qgcm3[gas_pcnst()];
@@ -304,7 +659,154 @@ void construct_subareas_1gridcell(
       }
     }
   }
+  //---------------------------------------------------------------------------------------------------
+  // Determine which category the current grid cell belongs to: partly cloudy,
+  // all cloudy, or all clear
+  //---------------------------------------------------------------------------------------------------
+  const bool grid_cell_has_only_clea_area =
+      ((jclea == 1) && (jcldy == 0) && (nsubarea == 1));
+  const bool grid_cell_has_only_cldy_area =
+      ((jclea == 0) && (jcldy == 1) && (nsubarea == 1));
+  const bool gird_cell_is_partly_cldy =
+      (jclea > 0) && (jcldy > 0) && (jclea + jcldy == 3) && (nsubarea == 2);
 
+  // Sanity check
+  if((!grid_cell_has_only_clea_area) && (!grid_cell_has_only_cldy_area) &&
+     (!gird_cell_is_partly_cldy)) {
+    // FIXME: Ensure that EKAT_KERNEL_ASSERT_MSG works in non-debug run
+    EKAT_KERNEL_ASSERT_MSG(true,
+                           "Error! modal_aero_amicphys - bad jclea, jcldy, "
+                           "nsubarea, jclea, jcldy, nsubarea\n");
+  }
+
+  //*************************************************************************************************
+  // Category I: grid cell is either all clear or all cloudy. Copy the grid
+  // cell mean values.
+  //*************************************************************************************************
+  if(grid_cell_has_only_clea_area || grid_cell_has_only_cldy_area) {
+    constexpr int jsub = 1;
+    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+      // copy all gases and aerosols
+      if(lmapcc_all(icnst) > 0) {
+        qsub1[icnst][jsub] = qgcm1[icnst];
+        qsub2[icnst][jsub] = qgcm2[icnst];
+        qsub3[icnst][jsub] = qgcm3[icnst];
+
+        qqcwsub2[icnst][jsub] = qqcwgcm2[icnst];
+        qqcwsub3[icnst][jsub] = qqcwgcm3[icnst];
+      }
+    }
+  }
+  //*************************************************************************************************
+  // Category II: partly cloudy grid cell. Tracer mixing ratios are generally
+  // assumed different in clear and cloudy subareas.  This is primarily
+  // because the interstitial aerosol mixing ratios are assumed to be lower
+  // in the cloudy sub-area than in the clear sub-area, as much of the
+  // aerosol is activated in the cloudy sub-area.
+  //*************************************************************************************************
+  else if(gird_cell_is_partly_cldy) {
+    //===================================
+    // Set gas mixing ratios in subareas
+    //===================================
+    //------------------------------------------------------------------------------------------
+    // Before gas chemistry, gas mixing ratios are assumed to be the same in
+    // all subareas, i.e., they all equal the grid cell mean.
+    //------------------------------------------------------------------------------------------
+    bool cnst_is_gas[gas_pcnst()] = {};
+    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+      cnst_is_gas[icnst] = (lmapcc_all(icnst) == lmapcc_val_gas());
+    }
+
+    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+      if(cnst_is_gas[icnst]) {
+        for(int jsub = 0; jsub < nsubarea; ++jsub) {
+          qsub1[icnst][jsub] = qgcm1[icnst];
+        }
+      }
+    }
+
+    //------------------------------------------------------------------------------------------
+    // After gas chemistry, still assume gas mixing ratios are the same in all
+    // subareas.
+    //------------------------------------------------------------------------------------------
+
+    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+      if(cnst_is_gas[icnst]) {
+        for(int jsub = 0; jsub < nsubarea; ++jsub) {
+          qsub2[icnst][jsub] = qgcm2[icnst];
+        }
+      }
+    }
+
+    //----------------------------------------------------------------------------------------
+    // After cloud chemistry, gas and aerosol mass mixing ratios in the clear
+    // subarea are assumed to be the same as their values before cloud
+    // chemistry (because by definition, cloud chemistry did not happen in
+    // clear sky), while the mixing ratios in the cloudy subarea likely have
+    // changed.
+    //----------------------------------------------------------------------------------------
+    // Gases in the clear subarea remain the same as their values before cloud
+    // chemistry.
+    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+      if(cnst_is_gas[icnst]) {
+        qsub3[icnst][jclea] = qsub2[icnst][jclea];
+      }
+    }
+
+    // Calculate the gas mixing ratios in the cloudy subarea using the
+    // grid-cell mean, cloud fraction and the clear-sky values
+#if 0
+    compute_qsub_from_gcm_and_qsub_of_other_subarea(cnst_is_gas, fclea, fcldy,
+                                                    qgcm3,         // in
+                                                    qsub3, qsub3)  // inout
+
+     //=========================================================================
+     // Set AEROSOL mixing ratios in subareas.
+     // Only need to do this for points 2 and 3 in the time integraion loop,
+     // i.e., the before-cloud-chem and after-cloud-chem states.
+     //=========================================================================
+     // Cloud-borne aerosols. (They are straightforward to partition, 
+     // as they only exist in the cloudy subarea.)
+     //----------------------------------------------------------------------------------------
+     // Partition mass and number before cloud chemistry
+
+     call set_subarea_qnumb_for_cldbrn_aerosols( loffset, jclea, jcldy, fcldy, qqcwgcm2, qqcwsub2 )
+     call set_subarea_qmass_for_cldbrn_aerosols( loffset, jclea, jcldy, fcldy, qqcwgcm2, qqcwsub2 )
+
+     // Partition mass and number before cloud chemistry
+
+     call set_subarea_qnumb_for_cldbrn_aerosols( loffset, jclea, jcldy, fcldy, qqcwgcm3, qqcwsub3 )
+     call set_subarea_qmass_for_cldbrn_aerosols( loffset, jclea, jcldy, fcldy, qqcwgcm3, qqcwsub3 )
+
+     //----------------------------------------------------------------------------------------
+     // Interstitial aerosols. (They can exist in both cloudy and clear subareas, and hence 
+     // need to be partitioned.)
+     //----------------------------------------------------------------------------------------
+     // Partition mass and number before cloud chemistry
+
+     call set_subarea_qnumb_for_intrst_aerosols( loffset, jclea, jcldy, fclea, fcldy, &// in
+                                                 qgcm2, qqcwgcm2,                     &// in
+                                                 qgcm2, qsub2                         )// in, inout
+
+     call set_subarea_qmass_for_intrst_aerosols( loffset, jclea, jcldy, fclea, fcldy, &// in
+                                                 qgcm2, qqcwgcm2,                     &// in
+                                                 qgcm2, qsub2                         )// in, inout
+
+     // Partition mass and number before cloud chemistry
+
+     call set_subarea_qnumb_for_intrst_aerosols( loffset, jclea, jcldy, fclea, fcldy, &// in
+                                                 qgcm2, qqcwgcm2,                     &// in
+                                                 qgcm3, qsub3                         )// in, inout
+
+     call set_subarea_qmass_for_intrst_aerosols( loffset, jclea, jcldy, fclea, fcldy, &// in
+                                                 qgcm2, qqcwgcm2,                     &// in
+                                                 qgcm3, qsub3                         )// in, inout
+
+#endif
+  }  // different categories
+
+#if 0
+OLD CODE
   // *************************************************************************************************
   //  Calculate initial (i.e., before cond/rnam/nnuc/coag) tracer mixing
   //  ratios within the sub-areas
@@ -479,8 +981,11 @@ void construct_subareas_1gridcell(
   //  aerosol water -- how to treat this in sub-areas needs more work/thinking
   //  currently modal_aero_water_uptake calculates qaerwat using
   //     the grid-cell mean interstital-aerosol mix-rats and the clear-area rh
-  for(int jsub = 0; jsub < nsubarea; ++jsub)
-    for(int i = 0; i < num_modes; ++i) qaerwatsub3[i][jsub] = qaerwatgcm3[i];
+
+  // NOTE: Commented out the following code as this code is only invoked in
+  // Fortran when "qaerwat" is present "qaerwat" is not present in the v2
+  // version of the code for(int jsub = 0; jsub < nsubarea; ++jsub)
+  //   for(int i = 0; i < num_modes; ++i) qaerwatsub3[i][jsub] = qaerwatgcm3[i];
 
   // ------------------------------------------------------------------------------------
   if(nsubarea == 1) {
@@ -495,6 +1000,7 @@ void construct_subareas_1gridcell(
       qqcwsub3[i][j] = 0.0;
     }
   }
+#endif
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -545,9 +1051,9 @@ void mam_amicphys_1subarea_clear(
   const Real alnsg_aer[num_modes] = {0.58778666490211906, 0.47000362924573563,
                                      0.58778666490211906, 0.47000362924573563};
   const Real uptk_rate_factor[num_gas_ids] = {0.81, 1.0, 1.0};
-  // calculates changes to gas and aerosol sub-area TMRs (tracer mixing ratios)
-  // qgas3, qaer3, qnum3 are the current incoming TMRs
-  // qgas4, qaer4, qnum4 are the updated outgoing TMRs
+  // calculates changes to gas and aerosol sub-area TMRs (tracer mixing
+  // ratios) qgas3, qaer3, qnum3 are the current incoming TMRs qgas4, qaer4,
+  // qnum4 are the updated outgoing TMRs
   //
   // this routine calculates changes involving
   //    gas-aerosol exchange (condensation/evaporation)
@@ -598,8 +1104,8 @@ void mam_amicphys_1subarea_clear(
       if(igas == igas_h2so4 || igas == igas_nh3) {
         // if config.gaexch_h2so4_uptake_optaa == 2, then
         //    if qgas increases from pre-gaschem to post-cldchem,
-        //       start from the pre-gaschem mix-ratio and add in the production
-        //       during the integration
+        //       start from the pre-gaschem mix-ratio and add in the
+        //       production during the integration
         //    if it decreases,
         //       start from post-cldchem mix-ratio
         // *** currently just do this for h2so4 and nh3
@@ -688,8 +1194,8 @@ void mam_amicphys_1subarea_clear(
         for(int j = 0; j < num_modes; ++j)
           qaer_delsub_cond[i][j] = qaer_cur[i][j] - qaer_sv1[i][j];
 
-      // qaer_del_grow4rnam = change in qaer_del_cond during latest condensation
-      // calculations
+      // qaer_del_grow4rnam = change in qaer_del_cond during latest
+      // condensation calculations
       for(int i = 0; i < num_aerosol_ids; ++i)
         for(int j = 0; j < num_modes; ++j)
           qaer_delsub_grow4rnam[i][j] = qaer_cur[i][j] - qaer_sv1[i][j];
@@ -955,22 +1461,24 @@ void mam_amicphys_1subarea_cloudy(
     Real qaercw_delaa[AeroConfig::num_gas_ids()][AeroConfig::num_modes()]
                      [nqqcwtendaa()]) {
   //
-  // calculates changes to gas and aerosol sub-area TMRs (tracer mixing ratios)
-  // qgas3, qaer3, qaercw3, qnum3, qnumcw3 are the current incoming TMRs
-  // qgas4, qaer4, qaercw4, qnum4, qnumcw4 are the updated outgoing TMRs
+  // calculates changes to gas and aerosol sub-area TMRs (tracer mixing
+  // ratios) qgas3, qaer3, qaercw3, qnum3, qnumcw3 are the current incoming
+  // TMRs qgas4, qaer4, qaercw4, qnum4, qnumcw4 are the updated outgoing TMRs
   //
-  // when config.do_cond = false, this routine only calculates changes involving
-  //    growth from smaller to larger modes (renaming) following cloud chemistry
-  //    so gas TMRs are not changed
-  // when config.do_cond = true, this routine also calculates changes involving
+  // when config.do_cond = false, this routine only calculates changes
+  // involving
+  //    growth from smaller to larger modes (renaming) following cloud
+  //    chemistry so gas TMRs are not changed
+  // when config.do_cond = true, this routine also calculates changes
+  // involving
   //    gas-aerosol exchange (condensation/evaporation)
   //    transfer of particles from hydrophobic modes to hydrophilic modes
   //    (aging)
   //       due to condensation
   // currently this routine does not do
-  //    new particle nucleation - because h2so4 gas conc. should be very low in
-  //    cloudy air coagulation - because cloud-borne aerosol would need to be
-  //    included
+  //    new particle nucleation - because h2so4 gas conc. should be very low
+  //    in cloudy air coagulation - because cloud-borne aerosol would need to
+  //    be included
   //
 
   // qXXXN (X=gas,aer,wat,num; N=1:4) are sub-area mixing ratios
@@ -1045,8 +1553,8 @@ void mam_amicphys_1subarea_cloudy(
       if(igas == igas_h2so4 || igas == igas_nh3) {
         // if gaexch_h2so4_uptake_optaa == 2, then
         //    if qgas increases from pre-gaschem to post-cldchem,
-        //       start from the pre-gaschem mix-ratio and add in the production
-        //       during the integration
+        //       start from the pre-gaschem mix-ratio and add in the
+        //       production during the integration
         //    if it decreases,
         //       start from post-cldchem mix-ratio
         // *** currently just do this for h2so4 and nh3
@@ -1133,8 +1641,8 @@ void mam_amicphys_1subarea_cloudy(
         for(int j = 0; j < num_modes; ++j)
           qaer_delsub_cond[i][j] = qaer_cur[i][j] - qaer_sv1[i][j];
 
-      // qaer_del_grow4rnam = change in qaer_del_cond during latest condensation
-      // calculations
+      // qaer_del_grow4rnam = change in qaer_del_cond during latest
+      // condensation calculations
       for(int i = 0; i < num_aerosol_ids; ++i)
         for(int j = 0; j < num_modes; ++j)
           qaer_delsub_grow4rnam[i][j] = qaer_cur[i][j] - qaer_sv1[i][j];
@@ -1324,9 +1832,9 @@ void mam_amicphys_1gridcell(
     Real qqcwsub_tendaa[AeroConfig::num_gas_ids()][nqqcwtendaa()]
                        [maxsubarea()]) {
   //
-  // calculates changes to gas and aerosol sub-area TMRs (tracer mixing ratios)
-  // qsub3 and qqcwsub3 are the incoming current TMRs
-  // qsub4 and qqcwsub4 are the outgoing updated TMRs
+  // calculates changes to gas and aerosol sub-area TMRs (tracer mixing
+  // ratios) qsub3 and qqcwsub3 are the incoming current TMRs qsub4 and
+  // qqcwsub4 are the outgoing updated TMRs
   //
   // qsubN and qqcwsubN (N=1:4) are tracer mixing ratios (TMRs, mol/mol or
   // #/kmol) in sub-areas
@@ -1482,19 +1990,20 @@ void mam_amicphys_1gridcell(
 }  // anonymous namespace
 
 KOKKOS_INLINE_FUNCTION
-void modal_aero_amicphys_intr(const AmicPhysConfig &config, const int nstep,
-                              const Real deltat, const Real temp,
-                              const Real pmid, const Real pdel, const Real zm,
-                              const Real pblh, const Real qv, const Real cld,
-                              Real q[gas_pcnst()], Real qqcw[gas_pcnst()],
+void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
+                              const int nstep, const Real deltat,
+                              const Real temp, const Real pmid, const Real pdel,
+                              const Real zm, const Real pblh, const Real qv,
+                              const Real cld, Real q[gas_pcnst()],
+                              Real qqcw[gas_pcnst()],
                               const Real q_pregaschem[gas_pcnst()],
                               const Real q_precldchem[gas_pcnst()],
                               const Real qqcw_precldchem[gas_pcnst()],
                               Real q_tendbb[gas_pcnst()][nqtendbb()],
                               Real qqcw_tendbb[gas_pcnst()][nqtendbb()],
-                              Real dgncur_a[AeroConfig::num_modes()],
-                              Real dgncur_awet[AeroConfig::num_modes()],
-                              Real wetdens_host[AeroConfig::num_modes()],
+                              const Real dgncur_a[AeroConfig::num_modes()],
+                              const Real dgncur_awet[AeroConfig::num_modes()],
+                              const Real wetdens_host[AeroConfig::num_modes()],
                               Real qaerwat[AeroConfig::num_modes()]) {
   /*
       nstep                ! model time-step number
@@ -1579,34 +2088,123 @@ void modal_aero_amicphys_intr(const AmicPhysConfig &config, const int nstep,
   // Saturation vapor pressure
   const Real ev_sat = conversions::vapor_saturation_pressure_magnus(temp, pmid);
   // Saturation specific humidity
-  const Real qv_sat = epsqs * ev_sat / (pmid - (1 - epsqs) * ev_sat);
+  Real qv_sat = epsqs * ev_sat /
+                (pmid - (1 - epsqs) * ev_sat);  // BALLI: make it a const var
+  if(k == 48) {
+    const Real qv_sat_hardwired = 7.614546931278814E-003;
+    qv_sat                      = qv_sat_hardwired;
+  }
+
+  int nsubarea;       // total # of subareas to do calculations for
+  int ncldy_subarea;  // total # of cloudy subareas
+  int jclea, jcldy;   // indices of the clear and cloudy subareas
+  bool iscldy_subarea[maxsubarea()];  // whether a subarea is cloudy
+  Real afracsub[maxsubarea()];        // area fraction of each active
+                                      // subarea[unitless]
+  Real fcldy;                         // in  cloudy fraction of the grid cell
+  Real fclea;                         // in clear  fraction of the grid cell
+
+  setup_subareas(cld,                                      // in
+                 nsubarea, ncldy_subarea, jclea, jcldy,    // out
+                 iscldy_subarea, afracsub, fclea, fcldy);  // out
 
   const Real relhumgcm = haero::max(0.0, haero::min(1.0, qv / qv_sat));
+  if(k == 48) {
+    printf("QSAT:%.15e,%.15e,%.15e,%.15e,%.15e,%.15e\n", qv_sat, qv, pmid, temp,
+           epsqs, ev_sat);
+  }
 
-  // Set up cloudy/clear subareas inside a grid cell
-  int nsubarea, ncldy_subarea, jclea, jcldy;
-  bool iscldy_subarea[maxsubarea()];
-  Real afracsub[maxsubarea()];
   Real relhumsub[maxsubarea()];
+  set_subarea_rh(ncldy_subarea, jclea, jcldy, afracsub, relhumgcm,  // in
+                 relhumsub);                                        // out
+
+  //-------------------------------
+  // Set aerosol water in subareas
+  //-------------------------------
+  // Notes from Dick Easter/Steve Ghan: how to treat aerosol water in subareas
+  // needs more work/thinking Currently modal_aero_water_uptake calculates
+  // qaerwat using the grid-cell mean interstital-aerosol mix-rats and the
+  // clear-area RH.
+  // aerosol water mixing ratios (mol/mol)
+  Real qaerwatsub3[AeroConfig::num_modes()][maxsubarea()] = {
+      0};  // FIXME: can it be constexpr??
+
+  //-------------------------------------------------------------------------
+  // Set gases, interstitial aerosols, and cloud-borne aerosols in subareas
+  //-------------------------------------------------------------------------
+  // Copy grid cell mean mixing ratios; clip negative values if any.
+  Real qgcm1[gas_pcnst()], qgcm2[gas_pcnst()], qgcm3[gas_pcnst()];
+  Real qqcwgcm2[gas_pcnst()], qqcwgcm3[gas_pcnst()];  // cld borne aerosols
+  for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+    // Gases and interstitial aerosols
+    qgcm1[icnst] = haero::max(0, q_pregaschem[icnst]);
+    qgcm2[icnst] = haero::max(0, q_precldchem[icnst]);
+    qgcm3[icnst] = haero::max(0, q[icnst]);
+
+    // Cloud-borne aerosols
+    qqcwgcm2[icnst] = haero::max(0, qqcw_precldchem[icnst]);
+    qqcwgcm3[icnst] = haero::max(0, qqcw[icnst]);
+  }
+
+  // Partition grid cell mean to subareas
   Real qsub1[gas_pcnst()][maxsubarea()];
   Real qsub2[gas_pcnst()][maxsubarea()];
   Real qsub3[gas_pcnst()][maxsubarea()];
   Real qqcwsub1[gas_pcnst()][maxsubarea()];
   Real qqcwsub2[gas_pcnst()][maxsubarea()];
   Real qqcwsub3[gas_pcnst()][maxsubarea()];
-  // aerosol water mixing ratios (mol/mol)
-  Real qaerwatsub3[AeroConfig::num_modes()][maxsubarea()];
-  construct_subareas_1gridcell(cld, relhumgcm,                         // in
-                               q_pregaschem, q_precldchem,             // in
-                               qqcw_precldchem,                        // in
-                               q, qqcw,                                // in
-                               nsubarea, ncldy_subarea, jclea, jcldy,  // out
-                               iscldy_subarea, afracsub, relhumsub,    // out
-                               qsub1, qsub2, qsub3,                    // out
+
+  set_subarea_gases_and_aerosols(nsubarea, jclea, jcldy, fclea, fcldy,     // in
+                                 qgcm1, qgcm2, qqcwgcm2, qgcm3, qqcwgcm3,  // in
+                                 qsub1, qsub2, qqcwsub2, qsub3,  // out
+                                 qqcwsub3);                      // out
+
+  //=========================================================================
+  // Construct cloudy and clear (cloud-free) subareas within each grid cell
+  //=========================================================================
+  // Define subareas; set RH
+  //--------------------------
+
+  construct_subareas_1gridcell(cld, relhumgcm,              // in
+                               q_pregaschem, q_precldchem,  // in
+                               qqcw_precldchem,             // in
+                               q, qqcw,                     // in
+                               nsubarea, ncldy_subarea, jclea,
+                               jcldy,                                // out
+                               iscldy_subarea, afracsub, relhumsub,  // out
+                               qsub1, qsub2, qsub3,                  // out
                                qqcwsub1, qqcwsub2, qqcwsub3,
                                qaerwatsub3,  // out
                                qaerwat       // in
   );
+  if(k == 48) {
+    printf("amic1:%i,%i,%i,%i,%s,%s,%.15e,%.15e,%.15e,%.15e\n", nsubarea,
+           ncldy_subarea, jclea, jcldy, iscldy_subarea[0] ? "true" : "false",
+           iscldy_subarea[1] ? "true" : "false", afracsub[0], afracsub[1],
+           relhumsub[0], relhumsub[1]);
+  }
+
+  if(k == 48) {
+    for(int ii = 0; ii < AeroConfig::num_modes(); ++ii) {
+      for(int jj = 0; jj < maxsubarea(); ++jj) {
+        printf("amic2:%.15e,%i, %i\n", qaerwatsub3[ii][jj], ii, jj);
+      }
+    }
+  }
+
+  if(k == 48) {
+    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+      printf("lmapcc_aa:%i, %i\n", lmapcc_all(icnst), icnst);
+    }
+
+    for(int jsub = 0; jsub < maxsubarea(); ++jsub) {
+      for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+        printf("amic3:%.15e,%.15e,%.15e,%.15e,%.15e,%i, %i\n",
+               qsub1[icnst][jsub], qsub2[icnst][jsub], qqcwsub2[icnst][jsub],
+               qsub3[icnst][jsub], qqcwsub3[icnst][jsub], icnst, jsub);
+      }
+    }
+  }
 
   //  Initialize the "after-amicphys" values
   Real qsub4[gas_pcnst()][maxsubarea()]                   = {};
@@ -1638,7 +2236,6 @@ void modal_aero_amicphys_intr(const AmicPhysConfig &config, const int nstep,
   if(nsubarea == 1) {
     for(int i = 0; i < gas_pcnst(); ++i) {
       qgcm4[i] = qsub4[i][0];
-      printf("--->BALLI:-amic3: %e,%e\n", qgcm4[i], qsub4[i][0]);
     }
     for(int i = 0; i < gas_pcnst(); ++i)
       for(int j = 0; j < nqtendaa(); ++j)
@@ -1651,8 +2248,6 @@ void modal_aero_amicphys_intr(const AmicPhysConfig &config, const int nstep,
     for(int n = 0; n < nsubarea; ++n) {
       for(int i = 0; i < gas_pcnst(); ++i) {
         qgcm4[i] += qsub4[i][n] * afracsub[n];
-        printf("--->BALLI:-amic2: %e,%e,%e\n", qgcm4[i], qsub4[i][n],
-               afracsub[n]);
       }
       for(int i = 0; i < gas_pcnst(); ++i)
         for(int j = 0; j < nqtendaa(); ++j)
@@ -1692,7 +2287,6 @@ void modal_aero_amicphys_intr(const AmicPhysConfig &config, const int nstep,
   for(int lmz = 0; lmz < gas_pcnst(); ++lmz) {
     if(lmapcc_all(lmz) > 0) {
       // HW, to ensure non-negative
-      printf("--->BALLI:-amic1:, %e\n", qgcm4[lmz]);
       q[lmz] = haero::max(qgcm4[lmz], 0.0);
       if(lmapcc_all(lmz) >= lmapcc_val_aer()) {
         // HW, to ensure non-negative

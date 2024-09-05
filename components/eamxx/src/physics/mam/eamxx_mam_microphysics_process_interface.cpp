@@ -781,14 +781,14 @@ void MAMMicrophysics::run_impl(const double dt) {
   // addition of dt */
 
   linoz_time_state_.t_now = ts.frac_of_year_in_days();
-
+#if 0
   // FIXME: we do not need altitude_int for invariant tracers and linoz fields.
   view_1d dummy_altitude_int;
   scream::mam_coupling::advance_tracer_data(
       TracerDataReader_, *TracerHorizInterp_, ts, linoz_time_state_,
       tracer_data_beg_, tracer_data_end_, tracer_data_out_, p_src_invariant_,
       dry_atm_.p_mid, dummy_altitude_int, dry_atm_.z_iface, cnst_offline_);
-#if 0
+
   scream::mam_coupling::advance_tracer_data(
       LinozDataReader_, *LinozHorizInterp_, ts, linoz_time_state_,
       linoz_data_beg_, linoz_data_end_, linoz_data_out_, p_src_linoz_,
@@ -1000,9 +1000,9 @@ void MAMMicrophysics::run_impl(const double dt) {
 #endif
         Kokkos::parallel_for(
             Kokkos::TeamThreadRange(team, nlev), [&](const int k) {
-              printf("");
-              printf("Level:%i\n", k);
-              // extract atm state variables (input)
+              // printf("");
+              // printf("Level:%i\n", k);
+              //  extract atm state variables (input)
               Real temp    = atm.temperature(k);
               Real pmid    = atm.pressure(k);
               Real pdel    = atm.hydrostatic_dp(k);
@@ -1046,12 +1046,29 @@ void MAMMicrophysics::run_impl(const double dt) {
               // qqcw, vmr, vmrcw);
               // **STARTED**
 
-              mam_coupling::mmr2vmr(q, adv_mass_kg_per_moles,  // in
-                                    vmr);                      // out
+              // Note that adv_mass_kg_per_moles is used here as adv_mass has a
+              // units of g/moles and the following functions expects units of
+              // kg/moles
+
+              mam_coupling::mmr2vmr(q, adv_mass_kg_per_moles,     // in
+                                    vmr);                         // out
+              mam_coupling::mmr2vmr(qqcw, adv_mass_kg_per_moles,  // in
+                                    vmrcw);                       // out
+
               // for(int i = 0; i < gas_pcnst; ++i) {
               // printf("BALLI:-loop-bb:, %.15e,%.15e,%.15e,%i\n", vmr[i], q[i],
               //        adv_mass[i], i);
               //}
+
+              // create work array copies to retain "pre-chemistry" values
+              Real vmr_pregaschem[gas_pcnst]   = {};
+              Real vmr_precldchem[gas_pcnst]   = {};
+              Real vmrcw_precldchem[gas_pcnst] = {};
+              for(int i = 0; i < gas_pcnst; ++i) {
+                vmr_pregaschem[i]   = vmr[i];
+                vmr_precldchem[i]   = vmr[i];
+                vmrcw_precldchem[i] = vmrcw[i];
+              }
 
               //---------------------
               // Gas Phase Chemistry
@@ -1075,17 +1092,18 @@ void MAMMicrophysics::run_impl(const double dt) {
               }
               // BALLI- Remove below
               //  HARDWIRE invariant for this column
+
               Real invariants_hardwired[mam4::gas_chemistry::nfs] = {
-                  3.253199825132671E+015, 2.570027861854810E+015,
-                  683171963277861.,       13112546075.5717,
-                  9146.81639897120,       5085.39253522843,
-                  7936.72329095871,       1.08534494964347};
+                  1.611671144804186E+019, 1.273220204395307E+019,
+                  3.384509404088790E+018, 1.946888571483985E+017,
+                  1747457.15772133,       10173094.4765572,
+                  122842451.905173};
               for(int i = 0; i < mam4::gas_chemistry::nfs; ++i) {
                 invariants_k[i] = invariants_hardwired[i];
               }
               // BALLI- Remove above^^^
 
-              impl::gas_phase_chemistry(phis, temp, pmid, dt,           // in
+              impl::gas_phase_chemistry(k, phis, temp, pmid, dt,        // in
                                         photo_rates_k,                  // in
                                         extfrc_k.data(), invariants_k,  // in
                                         vmr);                           // out
@@ -1103,16 +1121,17 @@ void MAMMicrophysics::run_impl(const double dt) {
               constexpr Real mbar   = haero::Constants::molec_weight_dry_air;
               constexpr int indexm  = mam4::gas_chemistry::indexm;
 
-              // Note that adv_mass_kg_per_moles is used in mmr2vmr as
-              // adv_mass has a units of g/moles and mmr2vmr expects
-              //  units of kg/moles
-              mam_coupling::mmr2vmr(qqcw, adv_mass_kg_per_moles,  // in
-                                    vmrcw);                       // out
-#if 0
               mam4::mo_setsox::setsox_single_level(
-                  loffset, dt, pmid, pdel, temp, mbar, lwc, cldfrac, cldnum,
-                  invariants_k[indexm], config.setsox, vmrcw, vmr);
-              
+                  loffset, dt, pmid, pdel, temp, mbar, lwc,              // in
+                  cldfrac, cldnum, invariants_k[indexm], config.setsox,  // in
+                  vmrcw, vmr);                                           // out
+              if(k == 48) {
+                for(int i = 10; i < 13; ++i) {
+                  printf("vmrcw, vmr aft setsox:%0.15e,%0.15e,%i\n", vmrcw[i],
+                         vmr[i], i);
+                }
+              }
+
               // calculate aerosol water content using water uptake treatment
               // * dry and wet diameters [m]
               // * wet densities [kg/m3]
@@ -1122,21 +1141,45 @@ void MAMMicrophysics::run_impl(const double dt) {
               Real wetdens_kk[num_modes]     = {};
               Real qaerwat_kk[num_modes]     = {};
 
-              for (int imode = 0; imode < num_modes; imode++) {
+              for(int imode = 0; imode < num_modes; imode++) {
                 dgncur_awet_kk[imode] = wet_diameter_icol(imode, k);
-                dgncur_a_kk[imode] = dry_diameter_icol(imode, k);
-                qaerwat_kk[imode] = qaerwat_icol(imode, k);
-                wetdens_kk[imode] = wetdens_icol(imode, k);
+                dgncur_a_kk[imode]    = dry_diameter_icol(imode, k);
+                qaerwat_kk[imode]     = qaerwat_icol(imode, k);
+                wetdens_kk[imode]     = wetdens_icol(imode, k);
               }
 
+              // aerosol/gas species tendencies (output)
+              Real vmr_tendbb[gas_pcnst][nqtendbb]   = {};
+              Real vmrcw_tendbb[gas_pcnst][nqtendbb] = {};
               // do aerosol microphysics (gas-aerosol exchange, nucleation,
               // coagulation)
+              if(k == 48) {
+                printf("others:%0.15e,%0.15e,%0.15e\n", pblh, qv, cldfrac);
+                for(int im = 0; im < 4; im++) {
+                  printf("dgnum:%0.15e,%i\n", dgncur_a_kk[im], im);
+                  printf("dgnumwet:%0.15e\n", dgncur_awet_kk[im]);
+                  printf("wetdens:%0.15e\n", wetdens_kk[im]);
+                }
+              }
+
               impl::modal_aero_amicphys_intr(
-                  config.amicphys, step, dt, temp, pmid, pdel, zm, pblh, qv,
-                  cldfrac, vmr, vmrcw, vmr_pregaschem, vmr_precldchem,
-                  vmrcw_precldchem, vmr_tendbb, vmrcw_tendbb, dgncur_a,
-                  dgncur_awet, wetdens, qaerwat);
-              
+                  k, config.amicphys, step, dt, temp, pmid, pdel, zm,
+                  pblh,                                              // in
+                  qv, cldfrac,                                       // in
+                  vmr, vmrcw,                                        // out
+                  vmr_pregaschem, vmr_precldchem, vmrcw_precldchem,  // in
+                  vmr_tendbb, vmrcw_tendbb,                          // out
+                  dgncur_a_kk, dgncur_awet_kk, wetdens_kk,           // in
+                  qaerwat_kk);                                       // out
+
+              if(k == 48) {
+                for(int i = 10; i < 13; ++i) {
+                  printf("vmrcw, vmr aft amicphys:%0.15e,%0.15e,%i\n", vmrcw[i],
+                         vmr[i], i);
+                }
+              }
+
+#if 0
               //-----------------
               //  LINOZ chemistry
               //-----------------

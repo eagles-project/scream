@@ -409,11 +409,11 @@ mam4::mo_photo::PhotoTableData read_photo_table(const ekat::Comm& comm,
 // atmospheric column
 KOKKOS_INLINE_FUNCTION
 void gas_phase_chemistry(
-    Real phis, Real temp, Real pmid, Real dt,        // in
-    const Real photo_rates[mam4::mo_photo::phtcnt],  // in
-    const Real extfrc[mam4::gas_chemistry::extcnt],  // in
-    Real invariants[mam4::gas_chemistry::nfs],       // in
-    Real q[mam4::gas_chemistry::gas_pcnst]) {        // VMRs, inout
+    int k, Real phis, Real temp, Real pmid, Real dt,  // in
+    const Real photo_rates[mam4::mo_photo::phtcnt],   // in
+    const Real extfrc[mam4::gas_chemistry::extcnt],   // in
+    Real invariants[mam4::gas_chemistry::nfs],        // in
+    Real q[mam4::gas_chemistry::gas_pcnst]) {         // VMRs, inout
   // constexpr Real rga = 1.0/haero::Constants::gravity;
   // constexpr Real m2km = 0.01; // converts m -> km
 
@@ -547,36 +547,60 @@ void gas_phase_chemistry(
   Real prod_out[clscnt4], loss_out[clscnt4];
   // FIXME: BALLI- Hardwired
 
-  Real reaction_rates_temp[rxntot] = {
-      9.104338380173147e-5,   3.224643980505020e-20,  1.484624814175373e-008,
-      1.122331157995297e-011, 3.757649339501133e-008, 2.135050417619732e-011,
-      6.371543123107133e-009};
+  Real reaction_rates_hardwired[rxntot] = {0,
+                                           4.505614958995002E-015,
+                                           2.838082398133522E-006,
+                                           1.470668860923120E-006,
+                                           7.185387606092601E-006,
+                                           9.699433943599741E-006,
+                                           1.272008948243572E-005};
+  Real het_rates_hardwired[gas_pcnst]   = {
+        0.000000000000000E+000, 3.161797749446358E-006, 4.444435465865599E-006,
+        3.161797749446358E-006, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000};
+
+  Real extfrc_rates_hardwired[extcnt] = {
+      0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+      0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+      0.000000000000000E+000, 0.000000000000000E+000, 6.202603542883013E-018};
 
   for(int i = 0; i < rxntot; ++i) {
-    reaction_rates[i] = reaction_rates_temp[i];
+    reaction_rates[i] = reaction_rates_hardwired[i];
   }
-  het_rates[gas_pcnst] = {0};
+  for(int i = 0; i < gas_pcnst; ++i) {
+    het_rates[i] = het_rates_hardwired[i];
+  }
   for(int i = 0; i < extcnt; ++i) {
-    extfrc_rates[i] = 0;
+    extfrc_rates[i] = extfrc_rates_hardwired[i];
   }
-  for(int i = 0; i < 3; ++i) {
-    printf("q-before_imp:%0.15e,%i\n", q[i], i);
-  }
+  // for(int i = 0; i < 3; ++i) {
+  //   printf("q-before_imp:%0.15e,%i\n", q[i], i);
+  // }
   mam4::gas_chemistry::imp_sol(q,                                        // out
                                reaction_rates, het_rates, extfrc_rates,  // in
                                dt,                                       // in
                                permute_4, clsmap_4, factor, epsilon,     // in
                                prod_out, loss_out);                      // out
-  for(int i = 0; i < 3; ++i) {
-    printf("q-aft_imp:%0.15e,%i\n", q[i], i);
+  if(k == 48) {
+    for(int i = 0; i < 3; ++i) {
+      printf("q-aft_imp:%0.15e,%i\n", q[i], i);
+    }
   }
-  printf("\n");
+  // printf("\n");
 
   // save h2so4 change by gas phase chem (for later new particle nucleation)
   if(ndx_h2so4 > 0) {
     del_h2so4_gasprod = q[ndx_h2so4] - del_h2so4_gasprod;
   }
-  printf("del_h2so4_gasprod:%0.15e\n", del_h2so4_gasprod);
+  // printf("del_h2so4_gasprod:%0.15e\n", del_h2so4_gasprod);
 }
 
 }  // namespace scream::impl
