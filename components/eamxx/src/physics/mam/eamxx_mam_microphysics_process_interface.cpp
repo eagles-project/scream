@@ -1124,17 +1124,18 @@ void MAMMicrophysics::run_impl(const double dt) {
               if(k == 48) {
                 for(int i = 0; i < gas_pcnst; ++i) {
                   printf("vmrcw, vmr BEF setsox:%0.15e,%0.15e,%i\n", vmrcw[i],
-                         vmr[i], i+1);
+                         vmr[i], i + 1);
                 }
               }
-              mam4::mo_setsox::setsox_single_level(k, //FIXME: remove k
-                  loffset, dt, pmid, pdel, temp, mbar, lwc,              // in
+              mam4::mo_setsox::setsox_single_level(
+                  k,                                         // FIXME: remove k
+                  loffset, dt, pmid, pdel, temp, mbar, lwc,  // in
                   cldfrac, cldnum, invariants_k[indexm], config.setsox,  // in
                   vmrcw, vmr);                                           // out
               if(k == 48) {
                 for(int i = 0; i < gas_pcnst; ++i) {
                   printf("vmrcw, vmr aft setsox:%0.15e,%0.15e,%i\n", vmrcw[i],
-                         vmr[i], i+1);
+                         vmr[i], i + 1);
                 }
               }
 
