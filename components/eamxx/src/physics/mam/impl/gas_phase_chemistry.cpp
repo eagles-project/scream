@@ -408,12 +408,12 @@ mam4::mo_photo::PhotoTableData read_photo_table(const ekat::Comm& comm,
 // performs gas phase chemistry calculations on a single level of a single
 // atmospheric column
 KOKKOS_INLINE_FUNCTION
-void gas_phase_chemistry(
-    int k, Real phis, Real temp, Real pmid, Real dt,  // in
-    const Real photo_rates[mam4::mo_photo::phtcnt],   // in
-    const Real extfrc[mam4::gas_chemistry::extcnt],   // in
-    Real invariants[mam4::gas_chemistry::nfs],        // in
-    Real q[mam4::gas_chemistry::gas_pcnst]) {         // VMRs, inout
+void gas_phase_chemistry(int k, Real phis, Real temp, Real pmid, Real dt,  // in
+                         const Real photo_rates[mam4::mo_photo::phtcnt],   // in
+                         const Real extfrc[mam4::gas_chemistry::extcnt],   // in
+                         Real invariants[mam4::gas_chemistry::nfs],        // in
+                         Real q[mam4::gas_chemistry::gas_pcnst],  // VMRs, inout
+                         Real vmr0[mam4::gas_chemistry::gas_pcnst]) {  // out
   // constexpr Real rga = 1.0/haero::Constants::gravity;
   // constexpr Real m2km = 0.01; // converts m -> km
 
@@ -584,6 +584,10 @@ void gas_phase_chemistry(
   // for(int i = 0; i < 3; ++i) {
   //   printf("q-before_imp:%0.15e,%i\n", q[i], i);
   // }
+  // Mixing ratios before chemistry changes
+  for(int i = 0; i < gas_pcnst; ++i) {
+    vmr0[i] = q[i];
+  }
   mam4::gas_chemistry::imp_sol(q,                                        // out
                                reaction_rates, het_rates, extfrc_rates,  // in
                                dt,                                       // in

@@ -1060,16 +1060,6 @@ void MAMMicrophysics::run_impl(const double dt) {
               //        adv_mass[i], i);
               //}
 
-              // create work array copies to retain "pre-chemistry" values
-              Real vmr_pregaschem[gas_pcnst]   = {};
-              Real vmr_precldchem[gas_pcnst]   = {};
-              Real vmrcw_precldchem[gas_pcnst] = {};
-              for(int i = 0; i < gas_pcnst; ++i) {
-                vmr_pregaschem[i]   = vmr[i];
-                vmr_precldchem[i]   = vmr[i];
-                vmrcw_precldchem[i] = vmrcw[i];
-              }
-
               //---------------------
               // Gas Phase Chemistry
               //---------------------
@@ -1102,12 +1092,23 @@ void MAMMicrophysics::run_impl(const double dt) {
                 invariants_k[i] = invariants_hardwired[i];
               }
               // BALLI- Remove above^^^
-
+              //
+              // To store mixing ratios before chemistry changes
+              Real vmr0[gas_pcnst] = {};
               impl::gas_phase_chemistry(k, phis, temp, pmid, dt,        // in
                                         photo_rates_k,                  // in
                                         extfrc_k.data(), invariants_k,  // in
-                                        vmr);                           // out
+                                        vmr,                            // inout
+                                        vmr0);                          // out
 
+              // create work array copies to retain "pre-chemistry" values
+              // FIXME: is this comment right?
+              Real vmr_pregas[gas_pcnst] = {};
+              Real vmr_precld[gas_pcnst] = {};
+              for(int i = 0; i < gas_pcnst; ++i) {
+                vmr_pregas[i] = vmr[i];
+                vmr_precld[i] = vmrcw[i];
+              }
               //----------------------
               // Aerosol microphysics
               //----------------------
@@ -1117,18 +1118,23 @@ void MAMMicrophysics::run_impl(const double dt) {
               // aqueous chemistry ...
               // offset of first tracer in work arrays
               // (taken from mam4xx setsox validation test)
-              constexpr int loffset = 8;
+              constexpr int loffset = 9;
               constexpr Real mbar   = haero::Constants::molec_weight_dry_air;
               constexpr int indexm  = mam4::gas_chemistry::indexm;
-
-              mam4::mo_setsox::setsox_single_level(
+              if(k == 48) {
+                for(int i = 0; i < gas_pcnst; ++i) {
+                  printf("vmrcw, vmr BEF setsox:%0.15e,%0.15e,%i\n", vmrcw[i],
+                         vmr[i], i+1);
+                }
+              }
+              mam4::mo_setsox::setsox_single_level(k, //FIXME: remove k
                   loffset, dt, pmid, pdel, temp, mbar, lwc,              // in
                   cldfrac, cldnum, invariants_k[indexm], config.setsox,  // in
                   vmrcw, vmr);                                           // out
               if(k == 48) {
-                for(int i = 10; i < 13; ++i) {
+                for(int i = 0; i < gas_pcnst; ++i) {
                   printf("vmrcw, vmr aft setsox:%0.15e,%0.15e,%i\n", vmrcw[i],
-                         vmr[i], i);
+                         vmr[i], i+1);
                 }
               }
 
@@ -1164,13 +1170,13 @@ void MAMMicrophysics::run_impl(const double dt) {
 
               impl::modal_aero_amicphys_intr(
                   k, config.amicphys, step, dt, temp, pmid, pdel, zm,
-                  pblh,                                              // in
-                  qv, cldfrac,                                       // in
-                  vmr, vmrcw,                                        // out
-                  vmr_pregaschem, vmr_precldchem, vmrcw_precldchem,  // in
-                  vmr_tendbb, vmrcw_tendbb,                          // out
-                  dgncur_a_kk, dgncur_awet_kk, wetdens_kk,           // in
-                  qaerwat_kk);                                       // out
+                  pblh,                                     // in
+                  qv, cldfrac,                              // in
+                  vmr, vmrcw,                               // out
+                  vmr0, vmr_pregas, vmr_precld,             // in
+                  vmr_tendbb, vmrcw_tendbb,                 // out
+                  dgncur_a_kk, dgncur_awet_kk, wetdens_kk,  // in
+                  qaerwat_kk);                              // out
 
               if(k == 48) {
                 for(int i = 10; i < 13; ++i) {

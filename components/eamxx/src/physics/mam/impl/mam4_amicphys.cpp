@@ -54,7 +54,8 @@ KOKKOS_INLINE_FUNCTION constexpr int iqtend_nnuc() { return 2; }
 KOKKOS_INLINE_FUNCTION constexpr int iqtend_coag() { return 3; }
 KOKKOS_INLINE_FUNCTION constexpr int iqtend_cond_only() { return 4; }
 KOKKOS_INLINE_FUNCTION constexpr int iqqcwtend_rnam() { return 0; }
-KOKKOS_INLINE_FUNCTION constexpr int maxsubarea() { return 2; }
+// FIXME: Add comments why maxareas is 3!!!
+KOKKOS_INLINE_FUNCTION constexpr int maxsubarea() { return 3; }
 // In state_q, we have 40 species, the gasses and aerosols starts after the
 //  9th index, so loffset is 9
 KOKKOS_INLINE_FUNCTION constexpr int loffset() { return 9; }
@@ -172,9 +173,9 @@ void subarea_partition_factors(
 }
 
 KOKKOS_INLINE_FUNCTION
-void setup_subareas(const Real cld,                          // in
-                    int &nsubarea, int &ncldy_subarea,       // out
-                    int &jclea, int &jcldy,                  // out
+void setup_subareas(int k, const Real cld,              // in //FIXME: remove k
+                    int &nsubarea, int &ncldy_subarea,  // out
+                    int &jclea, int &jcldy,             // out
                     bool (&iscldy_subarea)[(maxsubarea())],  // out
                     Real (&afracsub)[maxsubarea()],          // out
                     Real &fclea, Real &fcldy)                // out
@@ -236,10 +237,12 @@ void setup_subareas(const Real cld,                          // in
     afracsub[jsub]       = 0;
   }
 
+  // jcldy>0 can be 1 or 2, so iscldy_subarea(1) or iscldy_subarea(2) is true
   if(jcldy > 0) iscldy_subarea[jcldy] = true;
-
   // Save the area fractions to an array
+  // jclea can only be 1 if jclea > 0, so afracsub (1) is set to fclea
   if(jclea > 0) afracsub[jclea] = fclea;
+  // jcldy can be 1 or 2, so afracsub(1) or afracsub(2) is set to fcldy
   if(jcldy > 0) afracsub[jcldy] = fcldy;
 
 }  // setup_subareas
@@ -263,14 +266,21 @@ void set_subarea_rh(const int &ncldy_subarea, const int &jclea,  // in
 
   if(ncldy_subarea <= 0) {
     // Entire grid cell is cloud-free. RH in subarea = grid cell mean.
+    // This is clear cell, rehumsub(0),rehumsub(1) and rehumsub(3) are relhumgcm
     for(int jsub = 0; jsub < maxsubarea(); ++jsub) relhumsub[jsub] = relhumgcm;
   } else {
     // Grid cell has a cloudy subarea. Set RH in that part to 1.0.
+    // jcldy can be 1 or 2 here.
+    // If jcldy is 1: relhumsub[1] is 1.0 (fully cloudy cell)
+    // if jcldy is 2: relhumsub[2] is 1.0. In this case jclea is >0,
+    //               so relhumsub[1] is set in if condition below
     relhumsub[jcldy] = 1;
 
     // If the grid cell also has a clear portion, back out the subarea RH from
     // the grid-cell mean RH and cloud fraction.
     if(jclea > 0) {
+      // jclea is > 0 only for partly cloudy cell. In this case
+      // jclea is 1, so relhumsub[1] is set here.
       Real relhum_tmp  = (relhumgcm - afracsub[jcldy]) / afracsub[jclea];
       relhumsub[jclea] = mam4::utils::min_max_bound(0, 1, relhum_tmp);
     }
@@ -279,6 +289,7 @@ void set_subarea_rh(const int &ncldy_subarea, const int &jclea,  // in
 
 KOKKOS_INLINE_FUNCTION
 void compute_qsub_from_gcm_and_qsub_of_other_subarea(
+    int k,  // FIXME remove k
     const bool (&lcompute)[gas_pcnst()], const Real &f_a,
     const Real &f_b,                  // in
     const Real (&qgcm)[gas_pcnst()],  // in
@@ -297,14 +308,22 @@ void compute_qsub_from_gcm_and_qsub_of_other_subarea(
   // qsub_a(ncnst) // value in subarea A (known, but might get adjusted)
   // qsub_b(ncnst) // value in subarea B (to be calculated here)
 
+  // Here we populate qsub for subarea index 2 (i.e. jcldy is 2 here)
+  //  and adjust subarea index 1(i.e., jclea is 1 here) if needed.
   for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+    if(k == 48) printf("HERE1\n");
     if(lcompute[icnst]) {
+      if(k == 48) printf("HERE2\n");
       // Calculate qsub_b
       EKAT_KERNEL_ASSERT_MSG(
           f_b != 0,
           "Error! compute_qsub_from_gcm_and_qsub_of_other_subarea - f_b is "
           "zero\n");
       qsub_b[icnst][jcldy] = (qgcm[icnst] - f_a * qsub_a[icnst][jclea]) / f_b;
+      if(k == 48)
+        printf("HERE3:%0.15e,%0.15e,%0.15e,%0.15e,%0.15e,%i,%i,%i\n",
+               qsub_b[icnst][jcldy], qgcm[icnst], f_a, f_b,
+               qsub_a[icnst][jclea], icnst, jclea, jcldy);
 
       // Check that this does not produce a negative value.
       // If so, set qsub_b to zero and adjust the value of qsub_a.
@@ -341,7 +360,7 @@ void set_subarea_qnumb_for_cldbrn_aerosols(
   //                             for this subr.)
 
   //----------------------------------------------------------------
-
+  // Here jclea ==1 and jcldy==2
   for(int imode = 0; imode < AeroConfig::num_modes(); ++imode) {
     const int icnst       = numptr_amode_gas_pcnst(imode);
     qqcwsub[icnst][jclea] = 0;
@@ -376,6 +395,8 @@ void set_subarea_qmass_for_cldbrn_aerosols(
   //                             this subr.)
 
   //----------------------------------------------------------------
+  // Here jclea ==1 and jcldy==2
+
   // loop thru all modes
   for(int imode = 0; imode < AeroConfig::num_modes(); ++imode) {
     // loop thru all species in a mode
@@ -563,6 +584,7 @@ void set_subarea_qmass_for_intrst_aerosols(
                           factor_clea, factor_cldy);               // out
 
     // apply partitioning factors
+    // Here jclea==1 and jcldy==2
     for(int ispec = 0; ispec < mam4::num_species_mode(imode); ++ispec) {
       const int icnst     = lmassptr_amode_gas_pcnst(ispec, imode);
       qsubx[icnst][jclea] = qgcmx[icnst] * factor_clea;
@@ -574,7 +596,7 @@ void set_subarea_qmass_for_intrst_aerosols(
 
 KOKKOS_INLINE_FUNCTION
 void set_subarea_gases_and_aerosols(
-    const int &nsubarea, const int &jclea,                               // in
+    int k, const int &nsubarea, const int &jclea,                        // in
     const int &jcldy,                                                    // in
     const Real &fclea, const Real &fcldy,                                // in
     const Real (&qgcm1)[gas_pcnst()], const Real (&qgcm2)[gas_pcnst()],  // in
@@ -590,24 +612,19 @@ void set_subarea_gases_and_aerosols(
   //------------------------------------------------------------------------------------------------
   // Purpose: Partition grid cell mean mixing ratios to clear/cloudy subareas.
   //------------------------------------------------------------------------------------------------
-  // FIXME: Remove the use staements
-  // use cam_abortutils,              only: endrun
-  // use modal_aero_amicphys_control, only: lmapcc_all, lmapcc_val_gas
-
   // nsubarea: # of active subareas in the current grid cell
   // jclea, jcldy: indices of the clear and cloudy subareas
   // fclea, fcldy: area fractions of the clear and cloudy subareas [unitless]
 
   // The next set of argument variables are tracer mixing ratios.
   //  - The units are different for gases, aerosol number, and aerosol mass.
-  //  The exact units do not
-  //    matter for this subroutine, as long as the grid cell mean values
-  //    ("gcm") and the corresponding subarea values ("sub") have the same
-  //    units.
+  //    The exact units do not matter for this subroutine, as long as the
+  //    grid cell mean values ("gcm") and the corresponding subarea values
+  //    ("sub") have the same units.
   //  - q* and qqcw* are correspond to the interstitial and cloud-borne
-  //  species, respectively
+  //    species, respectively
   //  - The numbers 1-3 correspond to different locations in the host model's
-  //  time integration loop.
+  //    time integration loop.
 
   // Grid cell mean mixing ratios
   // qgcm1(ncnst), qgcm2(ncnst), qqcwgcm2(ncnst), qgcm3(ncnst),
@@ -623,6 +640,8 @@ void set_subarea_gases_and_aerosols(
   // Initialize mixing ratios in subareas before the aerosol microphysics
   // calculations
   //------------------------------------------------------------------------------------
+  // FIXME:Should we set jsub==0 a special value (like NaNs) so that it is never
+  // used??
   for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
     for(int jsub = 0; jsub < maxsubarea(); ++jsub) {
       // Gases and interstitial aerosols
@@ -659,6 +678,10 @@ void set_subarea_gases_and_aerosols(
   // cell mean values.
   //*************************************************************************************************
   if(grid_cell_has_only_clea_area || grid_cell_has_only_cldy_area) {
+    // For fully clear and cloudy cells, we populate only 1st index of subarea
+    // for all output vars
+    //  Makes sense as there is only 1 subarea for these cases.
+    // FIXME: Should we fill in NaNs for the 0th and 2nd index??
     constexpr int jsub = 1;
     for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
       // copy all gases and aerosols
@@ -671,6 +694,9 @@ void set_subarea_gases_and_aerosols(
         qqcwsub3[icnst][jsub] = qqcwgcm3[icnst];
       }
     }
+    if(k == 48)
+      printf("qsub1_1:%0.15e, %i, %i, %i\n", qsub1[2][1], jclea, jcldy,
+             nsubarea);
   }
   //*************************************************************************************************
   // Category II: partly cloudy grid cell. Tracer mixing ratios are generally
@@ -687,6 +713,9 @@ void set_subarea_gases_and_aerosols(
     // Before gas chemistry, gas mixing ratios are assumed to be the same in
     // all subareas, i.e., they all equal the grid cell mean.
     //------------------------------------------------------------------------------------------
+
+    // NOTE: In this "else if" case jclea == 1 and jcldy == 2
+
     bool cnst_is_gas[gas_pcnst()] = {};
     for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
       cnst_is_gas[icnst] = (lmapcc_all(icnst) == lmapcc_val_gas());
@@ -694,12 +723,15 @@ void set_subarea_gases_and_aerosols(
 
     for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
       if(cnst_is_gas[icnst]) {
-        for(int jsub = 0; jsub < nsubarea; ++jsub) {
+        // For gases, assume both 1 and 2 subareas have grid mean values
+        for(int jsub = 1; jsub <= nsubarea; ++jsub) {
           qsub1[icnst][jsub] = qgcm1[icnst];
         }
       }
     }
-
+    // qsub1 is fully populated for gasses
+    if(k == 48)
+      printf("qsub1_2:%0.15e,%0.15e, %i\n", qsub1[2][2], qsub1[2][2], nsubarea);
     //------------------------------------------------------------------------------------------
     // After gas chemistry, still assume gas mixing ratios are the same in all
     // subareas.
@@ -707,21 +739,24 @@ void set_subarea_gases_and_aerosols(
 
     for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
       if(cnst_is_gas[icnst]) {
-        for(int jsub = 0; jsub < nsubarea; ++jsub) {
+        // For gases, assume both 1 and 2 subareas have grid mean values
+        for(int jsub = 1; jsub <= nsubarea; ++jsub) {
           qsub2[icnst][jsub] = qgcm2[icnst];
         }
       }
     }
-
+    // if(k == 48) printf("qsub1_3:%0.15e\n", qsub2[2][2]);
+    //  qsub2 is fully populated for gasses
     //----------------------------------------------------------------------------------------
-    // After cloud chemistry, gas and aerosol mass mixing ratios in the clear
-    // subarea are assumed to be the same as their values before cloud
-    // chemistry (because by definition, cloud chemistry did not happen in
-    // clear sky), while the mixing ratios in the cloudy subarea likely have
-    // changed.
+    //   After cloud chemistry, gas and aerosol mass mixing ratios in the clear
+    //   subarea are assumed to be the same as their values before cloud
+    //   chemistry (because by definition, cloud chemistry did not happen in
+    //   clear sky), while the mixing ratios in the cloudy subarea likely have
+    //   changed.
     //----------------------------------------------------------------------------------------
-    // Gases in the clear subarea remain the same as their values before cloud
-    // chemistry.
+    //   Gases in the clear subarea remain the same as their values before cloud
+    //   chemistry.
+    //  Here we populate qsub3 for index 1 only as jclea is 1.
     for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
       if(cnst_is_gas[icnst]) {
         qsub3[icnst][jclea] = qsub2[icnst][jclea];
@@ -730,13 +765,15 @@ void set_subarea_gases_and_aerosols(
 
     // Calculate the gas mixing ratios in the cloudy subarea using the
     // grid-cell mean, cloud fraction and the clear-sky values
-
-    compute_qsub_from_gcm_and_qsub_of_other_subarea(cnst_is_gas, fclea,
+    // Here we populate qsub3 for index 2 (jcldy) and adjust index 1 (jclea) if
+    // needed.
+    compute_qsub_from_gcm_and_qsub_of_other_subarea(k, cnst_is_gas, fclea,
                                                     fcldy,  // in
                                                     qgcm3, jclea,
                                                     jcldy,          // in
                                                     qsub3, qsub3);  // inout
-
+    if(k == 48) printf("qsub3_1:%0.15e, %0.15e\n", qsub3[2][1], qsub3[2][2]);
+    // qsub3 is fully populated for gasses
     //=========================================================================
     // Set AEROSOL mixing ratios in subareas.
     // Only need to do this for points 2 and 3 in the time integraion loop,
@@ -746,17 +783,21 @@ void set_subarea_gases_and_aerosols(
     // as they only exist in the cloudy subarea.)
     //----------------------------------------------------------------------------------------
     // Partition mass and number before cloud chemistry
-
+    // NOTE that in this case jclea is 1 and jcldy is 2
+    // Following 2 calls set qqcwsub2(:,1)=0 and qqcwsub2(:,2) to a computed
+    // value
     set_subarea_qnumb_for_cldbrn_aerosols(jclea, jcldy, fcldy,
                                           qqcwgcm2,   // in
                                           qqcwsub2);  // inout
+    // if(k==48)printf("qqcwsub2_2:%0.15e",qqcwsub2[0][0]);
 
     set_subarea_qmass_for_cldbrn_aerosols(jclea, jcldy, fcldy,
                                           qqcwgcm2,   // in
                                           qqcwsub2);  // inout
-
-    // Partition mass and number before cloud chemistry
-
+    // if(k==48)printf("qqcwsub2_3:%0.15e",qqcwsub2[0][0]);
+    //  Partition mass and number before cloud chemistry
+    // Following 2 calls set qqcwsub3(:,1)=0 and qqcwsub3(:,2) to a computed
+    // value
     set_subarea_qnumb_for_cldbrn_aerosols(jclea, jcldy, fcldy,
                                           qqcwgcm3,   // in
                                           qqcwsub3);  // inout
@@ -769,7 +810,7 @@ void set_subarea_gases_and_aerosols(
     // subareas, and hence need to be partitioned.)
     //----------------------------------------------------------------------------------------
     // Partition mass and number before cloud chemistry
-
+    // Following 2 calls set qsub2(:,1) = 0 and qsub2(:,2) to a computed value
     set_subarea_qnumb_for_intrst_aerosols(jclea, jcldy, fclea, fcldy,  // in
                                           qgcm2, qqcwgcm2, qgcm2,      // in
                                           qsub2);                      // inout
@@ -779,7 +820,7 @@ void set_subarea_gases_and_aerosols(
                                           qsub2);                      // inout
 
     // Partition mass and number before cloud chemistry
-
+    // Following 2 calls set qsub3(:,1) = 0 and qsub3(:,2) to a computed value
     set_subarea_qnumb_for_intrst_aerosols(jclea, jcldy, fclea, fcldy,  // in
                                           qgcm2, qqcwgcm2, qgcm3,      // in
                                           qsub3);                      // inout
@@ -2152,7 +2193,7 @@ void mam_amicphys_1gridcell(
     for(int j = 0; j < nqqcwtendaa(); ++j)
       for(int k = 0; k < maxsubarea(); ++k) qqcwsub_tendaa[i][j][k] = 0.0;
 
-  for(int jsub = 0; jsub < nsubarea; ++jsub) {
+  for(int jsub = 0; jsub <= nsubarea; ++jsub) {
     AmicPhysConfig sub_config = config;
     if(iscldy_subarea[jsub]) {
       sub_config.do_cond   = config.do_cond;
@@ -2300,7 +2341,7 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
                            *** MUST BE mol/mol-air for mass
                            *** NOTE ncol dimension
       qqcw(ncol,pver,pcnstxx)
-                             like q but for cloud-borner tracers
+                            like q but for cloud-borner tracers
                             these values are updated
       q_pregaschem(ncol,pver,pcnstxx)    ! q TMRs    before gas-phase
     chemistry q_precldchem(ncol,pver,pcnstxx)    ! q TMRs    before cloud
@@ -2388,7 +2429,7 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
   Real fcldy;                         // in  cloudy fraction of the grid cell
   Real fclea;                         // in clear  fraction of the grid cell
 
-  setup_subareas(cld,                                      // in
+  setup_subareas(k, cld,                                   // in
                  nsubarea, ncldy_subarea, jclea, jcldy,    // out
                  iscldy_subarea, afracsub, fclea, fcldy);  // out
 
@@ -2429,7 +2470,12 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
     qqcwgcm2[icnst] = haero::max(0, qqcw_precldchem[icnst]);
     qqcwgcm3[icnst] = haero::max(0, qqcw[icnst]);
   }
-
+  if(k == 48) {
+    for(int icnst = 0; icnst < 6; ++icnst) {
+      printf("amic2a:%.15e,%.15e,%.15e, %i\n", qgcm1[icnst], qgcm2[icnst],
+             qgcm3[icnst], icnst);
+    }
+  }
   // Partition grid cell mean to subareas
   Real qsub1[gas_pcnst()][maxsubarea()];
   Real qsub2[gas_pcnst()][maxsubarea()];
@@ -2438,7 +2484,7 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
   Real qqcwsub2[gas_pcnst()][maxsubarea()];
   Real qqcwsub3[gas_pcnst()][maxsubarea()];
 
-  set_subarea_gases_and_aerosols(nsubarea, jclea, jcldy, fclea, fcldy,     // in
+  set_subarea_gases_and_aerosols(k, nsubarea, jclea, jcldy, fclea, fcldy,  // in
                                  qgcm1, qgcm2, qqcwgcm2, qgcm3, qqcwgcm3,  // in
                                  qsub1, qsub2, qqcwsub2, qsub3,  // out
                                  qqcwsub3);                      // out
@@ -2449,7 +2495,7 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
   // Define subareas; set RH
   //--------------------------
 
-  construct_subareas_1gridcell(cld, relhumgcm,              // in
+  /*construct_subareas_1gridcell(cld, relhumgcm,              // in
                                q_pregaschem, q_precldchem,  // in
                                qqcw_precldchem,             // in
                                q, qqcw,                     // in
@@ -2461,136 +2507,139 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
                                qaerwatsub3,  // out
                                qaerwat       // in
   );
+  */
   if(k == 48) {
     printf("amic1:%i,%i,%i,%i,%s,%s,%.15e,%.15e,%.15e,%.15e\n", nsubarea,
-           ncldy_subarea, jclea, jcldy, iscldy_subarea[0] ? "true" : "false",
-           iscldy_subarea[1] ? "true" : "false", afracsub[0], afracsub[1],
-           relhumsub[0], relhumsub[1]);
+           ncldy_subarea, jclea, jcldy, iscldy_subarea[1] ? "true" : "false",
+           iscldy_subarea[2] ? "true" : "false", afracsub[1], afracsub[2],
+           relhumsub[1], relhumsub[2]);
   }
 
   if(k == 48) {
     for(int ii = 0; ii < AeroConfig::num_modes(); ++ii) {
       for(int jj = 0; jj < maxsubarea(); ++jj) {
-        printf("amic2:%.15e,%i, %i\n", qaerwatsub3[ii][jj], ii, jj);
+        // printf("amic2:%.15e,%i, %i\n", qaerwatsub3[ii][jj], ii, jj);
       }
     }
   }
 
   if(k == 48) {
     for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
-      printf("lmapcc_aa:%i, %i\n", lmapcc_all(icnst), icnst);
+      // printf("lmapcc_aa:%i, %i\n", lmapcc_all(icnst), icnst);
     }
-
-    for(int jsub = 0; jsub < maxsubarea(); ++jsub) {
-      for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
-        printf("amic3:%.15e,%.15e,%.15e,%.15e,%.15e,%i, %i\n",
-               qsub1[icnst][jsub], qsub2[icnst][jsub], qqcwsub2[icnst][jsub],
-               qsub3[icnst][jsub], qqcwsub3[icnst][jsub], icnst, jsub);
+  }
+    if(k == 48) {
+      for(int jsub = 1; jsub < maxsubarea(); ++jsub) {
+        for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+          printf("amic3:%.15e,%.15e,%.15e,%.15e,%.15e,%i, %i\n",
+                 qsub1[icnst][jsub], qsub2[icnst][jsub], qqcwsub2[icnst][jsub],
+                 qsub3[icnst][jsub], qqcwsub3[icnst][jsub], icnst+1, jsub);
+        }
       }
     }
-  }
 
-  //  Initialize the "after-amicphys" values
-  Real qsub4[gas_pcnst()][maxsubarea()]                   = {};
-  Real qqcwsub4[gas_pcnst()][maxsubarea()]                = {};
-  Real qaerwatsub4[AeroConfig::num_modes()][maxsubarea()] = {};
+    //  Initialize the "after-amicphys" values
+    Real qsub4[gas_pcnst()][maxsubarea()]                   = {};
+    Real qqcwsub4[gas_pcnst()][maxsubarea()]                = {};
+    Real qaerwatsub4[AeroConfig::num_modes()][maxsubarea()] = {};
 
-  //
-  // start integration
-  //
-  Real dgn_a[num_modes], dgn_awet[num_modes], wetdens[num_modes];
-  for(int n = 0; n < num_modes; ++n) {
-    dgn_a[n]    = dgncur_a[n];
-    dgn_awet[n] = dgncur_awet[n];
-    wetdens[n]  = haero::max(1000.0, wetdens_host[n]);
-  }
-  Real qsub_tendaa[gas_pcnst()][nqtendaa()][maxsubarea()]       = {};
-  Real qqcwsub_tendaa[gas_pcnst()][nqqcwtendaa()][maxsubarea()] = {};
-  mam_amicphys_1gridcell(config, nstep, deltat, nsubarea, ncldy_subarea,
-                         iscldy_subarea, afracsub, temp, pmid, pdel, zm, pblh,
-                         relhumsub, dgn_a, dgn_awet, wetdens, qsub1, qsub2,
-                         qqcwsub2, qsub3, qqcwsub3, qaerwatsub3, qsub4,
-                         qqcwsub4, qaerwatsub4, qsub_tendaa, qqcwsub_tendaa);
-
-  //
-  // form new grid-mean mix-ratios
-  Real qgcm4[gas_pcnst()];
-  Real qgcm_tendaa[gas_pcnst()][nqtendaa()];
-  Real qaerwatgcm4[num_modes];
-  if(nsubarea == 1) {
-    for(int i = 0; i < gas_pcnst(); ++i) {
-      qgcm4[i] = qsub4[i][0];
+    //
+    // start integration
+    //
+    Real dgn_a[num_modes], dgn_awet[num_modes], wetdens[num_modes];
+    for(int n = 0; n < num_modes; ++n) {
+      dgn_a[n]    = dgncur_a[n];
+      dgn_awet[n] = dgncur_awet[n];
+      wetdens[n]  = haero::max(1000.0, wetdens_host[n]);
     }
-    for(int i = 0; i < gas_pcnst(); ++i)
-      for(int j = 0; j < nqtendaa(); ++j)
-        qgcm_tendaa[i][j] = qsub_tendaa[i][j][0];
-    for(int i = 0; i < num_modes; ++i) qaerwatgcm4[i] = qaerwatsub4[i][0];
-  } else {
-    for(int i = 0; i < gas_pcnst(); ++i) qgcm4[i] = 0.0;
-    for(int i = 0; i < gas_pcnst(); ++i)
-      for(int j = 0; j < nqtendaa(); ++j) qgcm_tendaa[i][j] = 0.0;
-    for(int n = 0; n < nsubarea; ++n) {
+    Real qsub_tendaa[gas_pcnst()][nqtendaa()][maxsubarea()]       = {};
+    Real qqcwsub_tendaa[gas_pcnst()][nqqcwtendaa()][maxsubarea()] = {};
+    mam_amicphys_1gridcell(config, nstep, deltat, nsubarea, ncldy_subarea,
+                           iscldy_subarea, afracsub, temp, pmid, pdel, zm, pblh,
+                           relhumsub, dgn_a, dgn_awet, wetdens, qsub1, qsub2,
+                           qqcwsub2, qsub3, qqcwsub3, qaerwatsub3, qsub4,
+                           qqcwsub4, qaerwatsub4, qsub_tendaa, qqcwsub_tendaa);
+
+    //
+    // form new grid-mean mix-ratios
+    Real qgcm4[gas_pcnst()];
+    Real qgcm_tendaa[gas_pcnst()][nqtendaa()];
+    Real qaerwatgcm4[num_modes];
+    if(nsubarea == 1) {
       for(int i = 0; i < gas_pcnst(); ++i) {
-        qgcm4[i] += qsub4[i][n] * afracsub[n];
+        qgcm4[i] = qsub4[i][0];
       }
       for(int i = 0; i < gas_pcnst(); ++i)
         for(int j = 0; j < nqtendaa(); ++j)
-          qgcm_tendaa[i][j] =
-              qgcm_tendaa[i][j] + qsub_tendaa[i][j][n] * afracsub[n];
+          qgcm_tendaa[i][j] = qsub_tendaa[i][j][0];
+      for(int i = 0; i < num_modes; ++i) qaerwatgcm4[i] = qaerwatsub4[i][0];
+    } else {
+      for(int i = 0; i < gas_pcnst(); ++i) qgcm4[i] = 0.0;
+      for(int i = 0; i < gas_pcnst(); ++i)
+        for(int j = 0; j < nqtendaa(); ++j) qgcm_tendaa[i][j] = 0.0;
+      for(int n = 0; n <= nsubarea; ++n) {
+        for(int i = 0; i < gas_pcnst(); ++i) {
+          qgcm4[i] += qsub4[i][n] * afracsub[n];
+        }
+        for(int i = 0; i < gas_pcnst(); ++i)
+          for(int j = 0; j < nqtendaa(); ++j)
+            qgcm_tendaa[i][j] =
+                qgcm_tendaa[i][j] + qsub_tendaa[i][j][n] * afracsub[n];
+      }
+      for(int i = 0; i < num_modes; ++i)
+        // for aerosol water use the clear sub-area value
+        qaerwatgcm4[i] = qaerwatsub4[i][jclea - 1];
     }
-    for(int i = 0; i < num_modes; ++i)
-      // for aerosol water use the clear sub-area value
-      qaerwatgcm4[i] = qaerwatsub4[i][jclea - 1];
-  }
-  Real qqcwgcm4[gas_pcnst()];
-  Real qqcwgcm_tendaa[gas_pcnst()][nqqcwtendaa()];
-  if(ncldy_subarea <= 0) {
-    for(int i = 0; i < gas_pcnst(); ++i) qqcwgcm4[i] = haero::max(0.0, qqcw[i]);
-    for(int i = 0; i < gas_pcnst(); ++i)
-      for(int j = 0; j < nqqcwtendaa(); ++j) qqcwgcm_tendaa[i][j] = 0.0;
-  } else if(nsubarea == 1) {
-    for(int i = 0; i < gas_pcnst(); ++i) qqcwgcm4[i] = qqcwsub4[i][0];
-    for(int i = 0; i < gas_pcnst(); ++i)
-      for(int j = 0; j < nqqcwtendaa(); ++j)
-        qqcwgcm_tendaa[i][j] = qqcwsub_tendaa[i][j][0];
-  } else {
-    for(int i = 0; i < gas_pcnst(); ++i) qqcwgcm4[i] = 0.0;
-    for(int i = 0; i < gas_pcnst(); ++i)
-      for(int j = 0; j < nqqcwtendaa(); ++j) qqcwgcm_tendaa[i][j] = 0.0;
-    for(int n = 0; n < nsubarea; ++n) {
-      if(iscldy_subarea[n]) {
-        for(int i = 0; i < gas_pcnst(); ++i)
-          qqcwgcm4[i] += qqcwsub4[i][n] * afracsub[n];
-        for(int i = 0; i < gas_pcnst(); ++i)
-          for(int j = 0; j < nqqcwtendaa(); ++j)
-            qqcwgcm_tendaa[i][j] += qqcwsub_tendaa[i][j][n] * afracsub[n];
+    Real qqcwgcm4[gas_pcnst()];
+    Real qqcwgcm_tendaa[gas_pcnst()][nqqcwtendaa()];
+    if(ncldy_subarea <= 0) {
+      for(int i = 0; i < gas_pcnst(); ++i)
+        qqcwgcm4[i] = haero::max(0.0, qqcw[i]);
+      for(int i = 0; i < gas_pcnst(); ++i)
+        for(int j = 0; j < nqqcwtendaa(); ++j) qqcwgcm_tendaa[i][j] = 0.0;
+    } else if(nsubarea == 1) {
+      for(int i = 0; i < gas_pcnst(); ++i) qqcwgcm4[i] = qqcwsub4[i][0];
+      for(int i = 0; i < gas_pcnst(); ++i)
+        for(int j = 0; j < nqqcwtendaa(); ++j)
+          qqcwgcm_tendaa[i][j] = qqcwsub_tendaa[i][j][0];
+    } else {
+      for(int i = 0; i < gas_pcnst(); ++i) qqcwgcm4[i] = 0.0;
+      for(int i = 0; i < gas_pcnst(); ++i)
+        for(int j = 0; j < nqqcwtendaa(); ++j) qqcwgcm_tendaa[i][j] = 0.0;
+      for(int n = 0; n <= nsubarea; ++n) {
+        if(iscldy_subarea[n]) {
+          for(int i = 0; i < gas_pcnst(); ++i)
+            qqcwgcm4[i] += qqcwsub4[i][n] * afracsub[n];
+          for(int i = 0; i < gas_pcnst(); ++i)
+            for(int j = 0; j < nqqcwtendaa(); ++j)
+              qqcwgcm_tendaa[i][j] += qqcwsub_tendaa[i][j][n] * afracsub[n];
+        }
       }
     }
-  }
 
-  for(int lmz = 0; lmz < gas_pcnst(); ++lmz) {
-    if(lmapcc_all(lmz) > 0) {
-      // HW, to ensure non-negative
-      q[lmz] = haero::max(qgcm4[lmz], 0.0);
-      if(lmapcc_all(lmz) >= lmapcc_val_aer()) {
+    for(int lmz = 0; lmz < gas_pcnst(); ++lmz) {
+      if(lmapcc_all(lmz) > 0) {
         // HW, to ensure non-negative
-        qqcw[lmz] = haero::max(qqcwgcm4[lmz], 0.0);
+        q[lmz] = haero::max(qgcm4[lmz], 0.0);
+        if(lmapcc_all(lmz) >= lmapcc_val_aer()) {
+          // HW, to ensure non-negative
+          qqcw[lmz] = haero::max(qqcwgcm4[lmz], 0.0);
+        }
       }
     }
+    for(int i = 0; i < gas_pcnst(); ++i) {
+      if(iqtend_cond() < nqtendbb())
+        q_tendbb[i][iqtend_cond()] = qgcm_tendaa[i][iqtend_cond()];
+      if(iqtend_rnam() < nqtendbb())
+        q_tendbb[i][iqtend_rnam()] = qgcm_tendaa[i][iqtend_rnam()];
+      if(iqtend_nnuc() < nqtendbb())
+        q_tendbb[i][iqtend_nnuc()] = qgcm_tendaa[i][iqtend_nnuc()];
+      if(iqtend_coag() < nqtendbb())
+        q_tendbb[i][iqtend_coag()] = qgcm_tendaa[i][iqtend_coag()];
+      if(iqqcwtend_rnam() < nqqcwtendbb())
+        qqcw_tendbb[i][iqqcwtend_rnam()] = qqcwgcm_tendaa[i][iqqcwtend_rnam()];
+    }
+    for(int i = 0; i < num_modes; ++i) qaerwat[i] = qaerwatgcm4[i];
   }
-  for(int i = 0; i < gas_pcnst(); ++i) {
-    if(iqtend_cond() < nqtendbb())
-      q_tendbb[i][iqtend_cond()] = qgcm_tendaa[i][iqtend_cond()];
-    if(iqtend_rnam() < nqtendbb())
-      q_tendbb[i][iqtend_rnam()] = qgcm_tendaa[i][iqtend_rnam()];
-    if(iqtend_nnuc() < nqtendbb())
-      q_tendbb[i][iqtend_nnuc()] = qgcm_tendaa[i][iqtend_nnuc()];
-    if(iqtend_coag() < nqtendbb())
-      q_tendbb[i][iqtend_coag()] = qgcm_tendaa[i][iqtend_coag()];
-    if(iqqcwtend_rnam() < nqqcwtendbb())
-      qqcw_tendbb[i][iqqcwtend_rnam()] = qqcwgcm_tendaa[i][iqqcwtend_rnam()];
-  }
-  for(int i = 0; i < num_modes; ++i) qaerwat[i] = qaerwatgcm4[i];
-}
 
 }  // namespace scream::impl
