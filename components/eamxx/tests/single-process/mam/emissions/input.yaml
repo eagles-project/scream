@@ -22,6 +22,16 @@ atmosphere_processes:
     srf_emis_specifier_for_pom_a4: ${SCREAM_DATA_DIR}/mam4xx/emissions/ne2np4/cmip6_mam4_pom_a4_surf_ne2np4_2010_clim_c20240726.nc
     srf_emis_specifier_for_so4_a1: ${SCREAM_DATA_DIR}/mam4xx/emissions/ne2np4/cmip6_mam4_so4_a1_surf_ne2np4_2010_clim_c20240726.nc
     srf_emis_specifier_for_so4_a2: ${SCREAM_DATA_DIR}/mam4xx/emissions/ne2np4/cmip6_mam4_so4_a2_surf_ne2np4_2010_clim_c20240726.nc
+    # FIXME: just set everything to a constant scalar for testing
+    initial_condition_so2: 1.0
+    initial_condition_soag: 2.0
+    initial_condition_bc_a4: 3.0
+    initial_condition_num_a1: 4.0
+    initial_condition_num_a2: 5.0
+    initial_condition_num_a4: 6.0
+    initial_condition_pom_a4: 7.0
+    initial_condition_so4_a1: 8.0
+    initial_condition_so4_a2: 9.0
 
 grids_manager:
   Type: Mesh Free
