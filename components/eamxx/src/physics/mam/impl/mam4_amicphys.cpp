@@ -45,7 +45,8 @@ struct AmicPhysConfig {
 
 namespace {
 
-KOKKOS_INLINE_FUNCTION constexpr int nqtendaa() { return 5; }
+// KOKKOS_INLINE_FUNCTION constexpr int nqtendaa() { return 5; } //old code
+KOKKOS_INLINE_FUNCTION constexpr int nqtendaa() { return 4; }
 KOKKOS_INLINE_FUNCTION constexpr int nqqcwtendaa() { return 1; }
 KOKKOS_INLINE_FUNCTION constexpr int nqqcwtendbb() { return 1; }
 KOKKOS_INLINE_FUNCTION constexpr int iqtend_cond() { return 0; }
@@ -60,7 +61,7 @@ KOKKOS_INLINE_FUNCTION constexpr int maxsubarea() { return 3; }
 //  9th index, so loffset is 9
 KOKKOS_INLINE_FUNCTION constexpr int loffset() { return 9; }
 // number of gases used in aerosol microphysics
-KOKKOS_INLINE_FUNCTION constexpr int ngas() { return 2; }
+KOKKOS_INLINE_FUNCTION constexpr int max_gas() { return 2; }
 
 // leave number mix-ratios unchanged (#/kmol-air)
 KOKKOS_INLINE_FUNCTION Real fcvt_num() { return 1; }
@@ -199,7 +200,7 @@ void subarea_partition_factors(
 }
 
 KOKKOS_INLINE_FUNCTION
-void setup_subareas(int k, const Real cld,              // in //FIXME: remove k
+void setup_subareas(int kk, const Real cld,             // in //FIXME: remove kk
                     int &nsubarea, int &ncldy_subarea,  // out
                     int &jclea, int &jcldy,             // out
                     bool (&iscldy_subarea)[(maxsubarea())],  // out
@@ -220,7 +221,7 @@ void setup_subareas(int k, const Real cld,              // in //FIXME: remove k
   // fclea, fcldy: area fraction of clear/cloudy subarea [unitless]
 
   // BAD CONSTANT
-  //  Cloud chemistry is only active when cld(i,k) >= 1.0e-5
+  //  Cloud chemistry is only active when cld(i,kk) >= 1.0e-5
   //  It may be that the macrophysics has a higher threshold than this
   constexpr Real fcld_locutoff = 1.0e-5;
 
@@ -315,7 +316,7 @@ void set_subarea_rh(const int &ncldy_subarea, const int &jclea,  // in
 
 KOKKOS_INLINE_FUNCTION
 void compute_qsub_from_gcm_and_qsub_of_other_subarea(
-    int k,  // FIXME remove k
+    int kk,  // FIXME remove kk
     const bool (&lcompute)[gas_pcnst()], const Real &f_a,
     const Real &f_b,                  // in
     const Real (&qgcm)[gas_pcnst()],  // in
@@ -337,16 +338,16 @@ void compute_qsub_from_gcm_and_qsub_of_other_subarea(
   // Here we populate qsub for subarea index 2 (i.e. jcldy is 2 here)
   //  and adjust subarea index 1(i.e., jclea is 1 here) if needed.
   for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
-    if(k == 48) printf("HERE1\n");
+    if(kk == 48) printf("HERE1\n");
     if(lcompute[icnst]) {
-      if(k == 48) printf("HERE2\n");
+      if(kk == 48) printf("HERE2\n");
       // Calculate qsub_b
       EKAT_KERNEL_ASSERT_MSG(
           f_b != 0,
           "Error! compute_qsub_from_gcm_and_qsub_of_other_subarea - f_b is "
           "zero\n");
       qsub_b[icnst][jcldy] = (qgcm[icnst] - f_a * qsub_a[icnst][jclea]) / f_b;
-      if(k == 48)
+      if(kk == 48)
         printf("HERE3:%0.15e,%0.15e,%0.15e,%0.15e,%0.15e,%i,%i,%i\n",
                qsub_b[icnst][jcldy], qgcm[icnst], f_a, f_b,
                qsub_a[icnst][jclea], icnst, jclea, jcldy);
@@ -622,7 +623,7 @@ void set_subarea_qmass_for_intrst_aerosols(
 
 KOKKOS_INLINE_FUNCTION
 void set_subarea_gases_and_aerosols(
-    int k, const int &nsubarea, const int &jclea,                        // in
+    int kk, const int &nsubarea, const int &jclea,                       // in
     const int &jcldy,                                                    // in
     const Real &fclea, const Real &fcldy,                                // in
     const Real (&qgcm1)[gas_pcnst()], const Real (&qgcm2)[gas_pcnst()],  // in
@@ -720,7 +721,7 @@ void set_subarea_gases_and_aerosols(
         qqcwsub3[icnst][jsub] = qqcwgcm3[icnst];
       }
     }
-    if(k == 48)
+    if(kk == 48)
       printf("qsub1_1:%0.15e, %i, %i, %i\n", qsub1[2][1], jclea, jcldy,
              nsubarea);
   }
@@ -756,7 +757,7 @@ void set_subarea_gases_and_aerosols(
       }
     }
     // qsub1 is fully populated for gasses
-    if(k == 48)
+    if(kk == 48)
       printf("qsub1_2:%0.15e,%0.15e, %i\n", qsub1[2][2], qsub1[2][2], nsubarea);
     //------------------------------------------------------------------------------------------
     // After gas chemistry, still assume gas mixing ratios are the same in all
@@ -771,7 +772,7 @@ void set_subarea_gases_and_aerosols(
         }
       }
     }
-    // if(k == 48) printf("qsub1_3:%0.15e\n", qsub2[2][2]);
+    // if(kk == 48) printf("qsub1_3:%0.15e\n", qsub2[2][2]);
     //  qsub2 is fully populated for gasses
     //----------------------------------------------------------------------------------------
     //   After cloud chemistry, gas and aerosol mass mixing ratios in the clear
@@ -793,12 +794,12 @@ void set_subarea_gases_and_aerosols(
     // grid-cell mean, cloud fraction and the clear-sky values
     // Here we populate qsub3 for index 2 (jcldy) and adjust index 1 (jclea) if
     // needed.
-    compute_qsub_from_gcm_and_qsub_of_other_subarea(k, cnst_is_gas, fclea,
+    compute_qsub_from_gcm_and_qsub_of_other_subarea(kk, cnst_is_gas, fclea,
                                                     fcldy,  // in
                                                     qgcm3, jclea,
                                                     jcldy,          // in
                                                     qsub3, qsub3);  // inout
-    if(k == 48) printf("qsub3_1:%0.15e, %0.15e\n", qsub3[2][1], qsub3[2][2]);
+    if(kk == 48) printf("qsub3_1:%0.15e, %0.15e\n", qsub3[2][1], qsub3[2][2]);
     // qsub3 is fully populated for gasses
     //=========================================================================
     // Set AEROSOL mixing ratios in subareas.
@@ -815,12 +816,12 @@ void set_subarea_gases_and_aerosols(
     set_subarea_qnumb_for_cldbrn_aerosols(jclea, jcldy, fcldy,
                                           qqcwgcm2,   // in
                                           qqcwsub2);  // inout
-    // if(k==48)printf("qqcwsub2_2:%0.15e",qqcwsub2[0][0]);
+    // if(kk==48)printf("qqcwsub2_2:%0.15e",qqcwsub2[0][0]);
 
     set_subarea_qmass_for_cldbrn_aerosols(jclea, jcldy, fcldy,
                                           qqcwgcm2,   // in
                                           qqcwsub2);  // inout
-    // if(k==48)printf("qqcwsub2_3:%0.15e",qqcwsub2[0][0]);
+    // if(kk==48)printf("qqcwsub2_3:%0.15e",qqcwsub2[0][0]);
     //  Partition mass and number before cloud chemistry
     // Following 2 calls set qqcwsub3(:,1)=0 and qqcwsub3(:,2) to a computed
     // value
@@ -1285,6 +1286,456 @@ void mam_amicphys_1subarea_clear(
   }
 }
 
+//--------------------------------------------------------------------------------
+// Call aerosol microphysics processes for a single (cloudy or clear) subarea
+// (with indices = lchnk,ii,kk,jsubarea)
+//
+// qgas3, qaer3, qaercw3, qnum3, qnumcw3 are the current incoming TMRs
+// qgas_cur, qaer_cur, qaercw_cur, qnum_cur, qnumcw_cur are the updated outgoing
+// TMRs
+//
+// In a clear subarea, calculate
+//  - gas-aerosol exchange (condensation/evaporation)
+//  - growth from smaller to larger modes (renaming) due to condensation
+//  - new particle nucleation
+//  - coagulation
+//  - transfer of particles from hydrophobic modes to hydrophilic modes (aging)
+//    due to condensation and coagulation
+//
+// In a cloudy subarea,
+//  - when do_cond = false, this routine only calculate changes involving
+//    growth from smaller to larger modes (renaming) following cloud chemistry
+//    so gas TMRs are not changed
+//  - when do_cond = true, this routine also calculates changes involving
+//    gas-aerosol exchange (condensation/evaporation)
+//  - transfer of particles from hydrophobic modes to hydrophilic modes (aging)
+//       due to condensation
+// Currently, in a cloudy subarea, this routine does not do
+//  - new particle nucleation - because h2so4 gas conc. should be very low in
+//  cloudy air
+//  - coagulation - because cloud-borne aerosol would need to be included
+//--------------------------------------------------------------------------------
+void mam_amicphys_1subarea(
+    const bool do_cond_sub, const bool do_rename_sub,           // in
+    const bool do_newnuc_sub,                                   // in
+    const bool do_coag_sub, const int ii, const int kk,         // in
+    const Real deltat, const int jsubarea, const int nsubarea,  // in
+    const bool (&iscldy_subarea)[maxsubarea()],
+    const Real (&afracsub)[maxsubarea()], const Real temp,               // in
+    const Real pmid, const Real pdel, const Real zmid, const Real pblh,  // in
+    const Real (&relhumsub)[maxsubarea()],
+    const Real (&dgn_a)[AeroConfig::num_modes()],  // in
+    const Real (&dgn_awet)[AeroConfig::num_modes()],
+    const Real (&wetdens)[AeroConfig::num_modes()],                  // in
+    const Real (&qgas1)[max_gas()], const Real (&qgas3)[max_gas()],  // in
+    Real (&qgas_cur)[max_gas()],
+    Real (&qgas_delaa)[max_gas()][nqtendaa()],                // inout
+    const Real (&qnum3)[AeroConfig::num_modes()],             // in
+    Real (&qnum_cur)[AeroConfig::num_modes()],                // inout
+    Real (&qnum_delaa)[AeroConfig::num_modes()][nqtendaa()],  // inout
+    const Real (
+        &qaer2)[AeroConfig::num_aerosol_ids()][AeroConfig::num_modes()],  // in
+    const Real (
+        &qaer3)[AeroConfig::num_aerosol_ids()][AeroConfig::num_modes()],  // in
+    Real (&qaer_cur)[AeroConfig::num_aerosol_ids()]
+                    [AeroConfig::num_modes()],  // inout
+    Real (&qaer_delaa)[AeroConfig::num_aerosol_ids()][AeroConfig::num_modes()]
+                      [nqtendaa()],                                // inout
+    const Real (&qwtr3)[AeroConfig::num_modes()],                  // in
+    Real (&qwtr_cur)[AeroConfig::num_modes()],                     // inout
+    const Real (&qnumcw3)[AeroConfig::num_modes()],                // in
+    Real (&qnumcw_cur)[AeroConfig::num_modes()],                   // inout
+    Real (&qnumcw_delaa)[AeroConfig::num_modes()][nqqcwtendaa()],  // inout
+    const Real (&qaercw2)[AeroConfig::num_aerosol_ids()]
+                         [AeroConfig::num_modes()],  // in
+    const Real (&qaercw3)[AeroConfig::num_aerosol_ids()]
+                         [AeroConfig::num_modes()],  // in
+    Real (&qaercw_cur)[AeroConfig::num_aerosol_ids()]
+                      [AeroConfig::num_modes()],  // inout
+    Real (&qaercw_delaa)[AeroConfig::num_aerosol_ids()][AeroConfig::num_modes()]
+                        [nqqcwtendaa()])  // inout
+
+{
+#if 0
+   use modal_aero_amicphys_control, only: r8, ntot_poaspec=>npoa, ntot_soaspec=>nsoa
+                                        , max_mode, max_gas, max_aer
+                                        , misc_vars_aa_type
+                                        , gaexch_h2so4_uptake_optaa, ngas, igas_h2so4, igas_nh3
+                                        , nait, nacc, max_agepair, n_agepair
+   use modal_aero_amicphys_diags,   only: nqtendaa, nqqcwtendaa
+                                        , iqtend_cond, iqtend_rnam, iqtend_nnuc, iqtend_coag, iqqcwtend_rnam
+
+   use modal_aero_data,   only: n_mode=>ntot_amode
+   use physconst,         only: r_universal
+   use modal_aero_coag,   only: mam_coag_1subarea
+   use modal_aero_rename, only: mam_rename_1subarea
+
+   logical,  intent(in)    :: do_cond_sub, do_rename_sub, print_out    // true if the aero. microp. process is calculated in this subarea
+   logical,  intent(in)    :: do_newnuc_sub, do_coag_sub    // true if the aero.  microp. process is calculated in this subarea
+   logical,  intent(in)    :: iscldy_subarea        // true if sub-area is cloudy
+   integer,  intent(in)    :: lchnk                 // chunk identifier
+   integer,  intent(in)    :: nstep                 // model time-step number
+   integer,  intent(in)    :: ii, kk                // column and level indices
+   integer,  intent(in)    :: latndx, lonndx        // lat and lon indices
+   integer,  intent(in)    :: lund                  // logical unit for diagnostic output
+   integer,  intent(in)    :: loffset
+   integer,  intent(in)    :: jsubarea, nsubarea    // sub-area index, number of sub-areas
+
+   real(r8), intent(in)    :: afracsub              // fractional area of subarea [unitless, 0-1]
+   real(r8), intent(in)    :: deltat                // time step [s]
+
+   real(r8), intent(in)    :: temp                  // air temperature at model levels [K]
+   real(r8), intent(in)    :: pmid                  // air pressure at layer center [Pa]
+   real(r8), intent(in)    :: pdel                  // pressure thickness of layer [Pa]
+   real(r8), intent(in)    :: zmid                  // altitude (above ground) at layer center [m]
+   real(r8), intent(in)    :: pblh                  // planetary boundary layer depth [m]
+   real(r8), intent(in)    :: relhum                // relative humidity [unitless, 0-1]
+
+   real(r8), intent(inout) :: dgn_a   (max_mode)    // dry geo. mean diameter [m] of number distribution
+   real(r8), intent(inout) :: dgn_awet(max_mode)    // wet geo. mean diameter [m] of number distribution
+   real(r8), intent(inout) :: wetdens (max_mode)    // interstitial aerosol wet density [kg/m3]
+
+   // Subare mixing ratios qXXXN (X=gas,aer,wat,num; N=1:4):
+   //
+   //    XXX=gas - gas species [kmol/kmol]
+   //    XXX=aer - aerosol mass species (excluding water) [kmol/kmol]
+   //    XXX=wat - aerosol water [kmol/kmol]
+   //    XXX=num - aerosol number [#/kmol]
+   //
+   //    N=1 - before gas-phase chemistry
+   //    N=2 - before cloud chemistry
+   //    N=3 - current incoming values (before gas-aerosol exchange, newnuc, coag)
+   //    N=_cur - updated outgoing values (after  gas-aerosol exchange, newnuc, coag)
+   //
+   real(r8), intent(in   ), dimension(max_gas) :: qgas1, qgas3  // [kmol/kmol]
+   real(r8), intent(inout), dimension(max_gas) :: qgas_cur      // [kmol/kmol]
+
+   real(r8), intent(in   ), dimension(max_mode) :: qnum3        // [#/kmol]
+   real(r8), intent(inout), dimension(max_mode) :: qnum_cur     // [#/kmol]
+
+   real(r8), intent(in   ), dimension(max_aer,max_mode) :: qaer2, qaer3  // [kmol/kmol]
+   real(r8), intent(inout), dimension(max_aer,max_mode) :: qaer_cur      // [kmol/kmol]
+
+   real(r8), intent(in   ), dimension(max_mode) :: qnumcw3      // [#/kmol]
+   real(r8), intent(inout), dimension(max_mode) :: qnumcw_cur   // [#/kmol]
+
+   real(r8), intent(in   ), dimension(max_aer,max_mode) :: qaercw2, qaercw3  // [kmol/kmol]
+   real(r8), intent(inout), dimension(max_aer,max_mode) :: qaercw_cur        // [kmol/kmol]
+
+   real(r8), intent(in   ), dimension(max_mode) :: qwtr3       // [kmol/kmol]
+   real(r8), intent(inout), dimension(max_mode) :: qwtr_cur    // [kmol/kmol]
+
+   // qXXX_delaa are TMR changes (increments, not tendencies) of different microphysics processes.
+   // These are diagnostics sent to history output; they do not directly affect time integration.
+
+   real(r8), intent(inout), dimension(max_gas, nqtendaa)             :: qgas_delaa    // [kmol/kmol]
+   real(r8), intent(inout), dimension(max_mode,nqtendaa)             :: qnum_delaa    // [   #/kmol]
+   real(r8), intent(inout), dimension(max_aer,max_mode,nqtendaa)     :: qaer_delaa    // [kmol/kmol]
+   real(r8), intent(inout), dimension(max_mode,nqqcwtendaa)          :: qnumcw_delaa  // [   #/kmol]
+   real(r8), intent(inout), dimension(max_aer,max_mode,nqqcwtendaa ) :: qaercw_delaa  // [kmol/kmol]
+
+   type ( misc_vars_aa_type ), intent(inout) :: misc_vars_aa_sub
+
+   // Local variables
+
+   integer,parameter ::  ntsubstep = 1
+   integer  :: jtsubstep     // sub-timestep index
+   real(r8) :: dtsubstep     // length time substep [s]
+
+   // if dest_mode_of_mode(imode) >  0, then mode imode gets renamed into mode dest_mode_of_mode(imode)
+   // if dest_mode_of_mode(imode) <= 0, then mode imode does not have renaming
+   integer :: dest_mode_of_mode(max_mode)
+
+   // Tmp variables of mixing ratios used for diagnosing increments or for process coupling
+
+   real(r8), dimension( 1:max_gas ) :: qgas_sv1, qgas_avg  // [kmol/kmol]
+
+   real(r8), dimension( 1:max_mode ) :: qnum_sv1    // [#/kmol]
+   real(r8), dimension( 1:max_mode ) :: qnumcw_sv1  // [#/kmol]
+
+   real(r8), dimension( 1:max_aer, 1:max_mode ) :: qaer_sv1     // [kmol/kmol]
+   real(r8), dimension( 1:max_aer, 1:max_mode ) :: qaercw_sv1   // [kmol/kmol]
+
+   // Mixing ratio increments of sub-timesteps used for process coupling
+
+   real(r8), dimension( 1:max_mode )            :: qnum_delsub_cond, qnum_delsub_coag   // [   #/kmol]
+   real(r8), dimension( 1:max_aer, 1:max_mode ) :: qaer_delsub_cond, qaer_delsub_coag   // [kmol/kmol]
+   real(r8), dimension( 1:max_aer, 1:max_mode ) :: qaer_delsub_grow4rnam                // [kmol/kmol]
+   real(r8), dimension( 1:max_aer, 1:max_mode ) :: qaercw_delsub_grow4rnam              // [kmol/kmol]
+   real(r8), dimension( 1:max_aer, 1:max_agepair ) :: qaer_delsub_coag_in               // [kmol/kmol]
+
+   real(r8) :: del_h2so4_gasprod   // [kmol/kmol]
+   real(r8) :: del_h2so4_aeruptk   // [kmol/kmol]
+
+   // Tendencies and coefficients usef for process coupling
+
+   real(r8) :: qgas_netprod_otrproc(max_gas)
+             // qgas_netprod_otrproc = gas net production rate from other processes
+             //    such as gas-phase chemistry and emissions [kmol/kmol/s]
+             // this allows the condensation (gasaerexch) routine to apply production and condensation loss
+             //    together, which is more accurate numerically
+             // NOTE - must be >= zero, as numerical method can fail when it is negative
+             // NOTE - currently only the values for h2so4 and nh3 should be non-zero
+
+   real(r8) :: uptkaer(max_gas,max_mode) // uptake rates of individual gas species and aerosol modes [1/s]
+   real(r8) :: uptkrate_h2so4            // total uptake rate of H2SO4 (summed over all modes) [1/s]
+   real(r8) :: dnclusterdt_substep       // cluster nucleation rate [#/m3/s]
+
+   // Miscellaneous
+
+   real(r8):: aircon                // air molar density [kmol/m3]
+   integer :: igas                  // gas index
+   logical :: do_aging_in_subarea
+
+   //---------------------------------------------------------------------------------------
+   // Calculate air molar density [kmol/m3] to be passed on to individual parameterizations
+   //---------------------------------------------------------------------------------------
+   aircon = pmid/(r_universal*temp) 
+
+   //----------------------------------------------------------
+   // Initializ mixing ratios with the before-amicphys values
+   //----------------------------------------------------------
+   qgas_cur = qgas3
+   if(print_out .and. ii==icolprnt(lchnk) .and. kk==kprnt) write(106,*)'qgas_cur1:',qgas_cur(1),qgas_cur(2)
+   qaer_cur = qaer3
+   qnum_cur = qnum3
+   qwtr_cur = qwtr3
+
+   if (iscldy_subarea) then
+      qnumcw_cur = qnumcw3
+      qaercw_cur = qaercw3
+   end if
+
+   //---------------------------------------------------------------------
+   // Diagnose net production rate of H2SO4 gas production
+   // cause by other processes (e.g., gas chemistry and cloud chemistry) 
+   //---------------------------------------------------------------------
+   qgas_netprod_otrproc(:) = 0.0_r8
+
+   // If gaexch_h2so4_uptake_optaa == 2, then
+   //  - if qgas increases from pre-gaschem to post-cldchem,
+   //    start from the pre-gaschem mix-ratio and add in the production during the integration
+   //  - if it decreases,  start from post-cldchem mix-ratio
+   // *** currently just do this for h2so4 (and nh3 if considered in model)
+
+   if ( (do_cond_sub) .and. (gaexch_h2so4_uptake_optaa==2) ) then
+      do igas = 1, ngas
+         if ((igas == igas_h2so4) .or. (igas == igas_nh3)) then
+            qgas_netprod_otrproc(igas) = (qgas3(igas) - qgas1(igas))/deltat
+            if ( qgas_netprod_otrproc(igas) >= 0.0_r8 ) then
+               qgas_cur(igas) = qgas1(igas)
+            else
+               qgas_netprod_otrproc(igas) = 0.0_r8
+            end if
+         end if
+      end do // igas
+   end if
+   if(print_out .and. ii==icolprnt(lchnk) .and. kk==kprnt) write(106,*)'qgas_cur2:',qgas_cur(1),qgas_cur(2)
+   
+   del_h2so4_gasprod = max( qgas3(igas_h2so4)-qgas1(igas_h2so4), 0.0_r8 )/ntsubstep
+
+   //-----------------------------------
+   // Initialize increment diagnostics
+   //-----------------------------------
+   qgas_delaa(:,:)   = 0._r8
+   qnum_delaa(:,:)   = 0._r8
+   qaer_delaa(:,:,:) = 0._r8
+
+   qnumcw_delaa(:,:)   = 0._r8 
+   qaercw_delaa(:,:,:) = 0._r8
+
+   misc_vars_aa_sub%ncluster_tend_nnuc_1grid = 0._r8
+
+   //***********************************
+   // loop over multiple time sub-steps
+   //***********************************
+   dtsubstep = deltat/ntsubstep
+
+   jtsubstep_loop: do jtsubstep = 1, ntsubstep
+
+      //======================
+      // Gas-aerosol exchange
+      //======================
+      uptkrate_h2so4 = 0.0_r8
+
+      if ( do_cond_sub ) then
+
+         qgas_sv1 = qgas_cur
+         qnum_sv1 = qnum_cur
+         qaer_sv1 = qaer_cur
+
+         call mam_gasaerexch_1subarea(                   
+           nstep,             lchnk,                     
+           ii,                kk,               jsubarea,
+           jtsubstep,         ntsubstep,                 
+           latndx,            lonndx,           lund,    
+           dtsubstep,                                    
+           temp,              pmid,             aircon,  
+           n_mode,                                       
+           qgas_cur,          qgas_avg,                  
+           qgas_netprod_otrproc,                         
+           qaer_cur,                                     
+           qnum_cur,                                     
+           qwtr_cur,                                     
+           dgn_a,             dgn_awet,         wetdens, 
+           uptkaer,           uptkrate_h2so4              )
+           if(print_out .and. ii==icolprnt(lchnk) .and. kk==kprnt) write(106,*)'qgas_cur3:',qgas_cur(1),qgas_cur(2)
+
+         qgas_delaa(:,iqtend_cond) = qgas_delaa(:,iqtend_cond) + (qgas_cur - (qgas_sv1 + qgas_netprod_otrproc*dtsubstep)) 
+
+         qnum_delsub_cond = qnum_cur - qnum_sv1
+         qaer_delsub_cond = qaer_cur - qaer_sv1
+
+         del_h2so4_aeruptk = qgas_cur(igas_h2so4)
+                           - (qgas_sv1(igas_h2so4) + qgas_netprod_otrproc(igas_h2so4)*dtsubstep)
+
+      else // do_cond_sub
+
+        qgas_avg(1:ngas) = qgas_cur(1:ngas)
+        qaer_delsub_cond = 0.0_r8
+        qnum_delsub_cond = 0.0_r8
+        del_h2so4_aeruptk = 0.0_r8
+
+      end if //do_cond_sub
+
+      //====================================
+      // Renaming after "continuous growth"
+      //====================================
+      if ( do_rename_sub ) then
+
+         dest_mode_of_mode(:) = 0
+         dest_mode_of_mode(nait) = nacc
+
+         //---------------------------------------------------------
+         // Calculate changes in aerosol mass mixing ratios due to 
+         //  - gas condensation/evaporation
+         //  - cloud chemistry (if the subarea is cloudy)
+         //---------------------------------------------------------
+         qaer_delsub_grow4rnam  = qaer_delsub_cond
+
+         if (iscldy_subarea) then 
+            qaer_delsub_grow4rnam   = (qaer3 - qaer2)/ntsubstep  + qaer_delsub_grow4rnam
+            qaercw_delsub_grow4rnam = (qaercw3 - qaercw2)/ntsubstep
+         end if
+
+         //----------
+         // Renaming
+         //----------
+         qnum_sv1 = qnum_cur
+         qaer_sv1 = qaer_cur
+
+         qnumcw_sv1 = qnumcw_cur
+         qaercw_sv1 = qaercw_cur
+
+         call mam_rename_1subarea(                         
+            iscldy_subarea,                                
+            dest_mode_of_mode, n_mode,                     
+            qnum_cur,   qaer_cur,    qaer_delsub_grow4rnam,
+            qnumcw_cur, qaercw_cur, qaercw_delsub_grow4rnam )
+
+         //------------------------
+         // Accumulate increments
+         //------------------------
+         qnum_delaa  (:,iqtend_rnam) = qnum_delaa  (:,iqtend_rnam) + (qnum_cur - qnum_sv1) 
+         qaer_delaa(:,:,iqtend_rnam) = qaer_delaa(:,:,iqtend_rnam) + (qaer_cur - qaer_sv1) 
+
+         if (iscldy_subarea) then
+            qnumcw_delaa  (:,iqqcwtend_rnam) = qnumcw_delaa  (:,iqqcwtend_rnam) + (qnumcw_cur - qnumcw_sv1) 
+            qaercw_delaa(:,:,iqqcwtend_rnam) = qaercw_delaa(:,:,iqqcwtend_rnam) + (qaercw_cur - qaercw_sv1)
+         end if
+
+      end if //do_rename_sub
+
+      //====================================
+      // New particle formation (nucleation)
+      //====================================
+      if ( do_newnuc_sub ) then
+
+         qgas_sv1 = qgas_cur
+         qnum_sv1 = qnum_cur
+         qaer_sv1 = qaer_cur
+
+         call mam_newnuc_1subarea(                                    
+            nstep,             lchnk,                                 
+            ii,                kk,               jsubarea,            
+            latndx,            lonndx,           lund,                
+            dtsubstep,                                                
+            temp,              pmid,             aircon,              
+            zmid,              pblh,             relhum,              
+            uptkrate_h2so4,   del_h2so4_gasprod, del_h2so4_aeruptk,   
+            n_mode,                                                   
+            qgas_cur,          qgas_avg,                              
+            qnum_cur,                                                 
+            qaer_cur,                                                 
+            qwtr_cur,                                                 
+            dnclusterdt_substep                                        )
+            if(print_out .and. ii==icolprnt(lchnk) .and. kk==kprnt) write(106,*)'qgas_cur4:',qgas_cur(1),qgas_cur(2)
+
+         qgas_delaa(:,iqtend_nnuc) = qgas_delaa(:,iqtend_nnuc) + (qgas_cur - qgas_sv1)
+         qnum_delaa(:,iqtend_nnuc) = qnum_delaa(:,iqtend_nnuc) + (qnum_cur - qnum_sv1)
+         qaer_delaa(:,:,iqtend_nnuc) = qaer_delaa(:,:,iqtend_nnuc) + (qaer_cur - qaer_sv1)
+
+         misc_vars_aa_sub%ncluster_tend_nnuc_1grid =
+         misc_vars_aa_sub%ncluster_tend_nnuc_1grid + dnclusterdt_substep*(dtsubstep/deltat) 
+
+      end if
+
+      //====================================
+      // Coagulation
+      //====================================
+      if ( do_coag_sub ) then
+
+         qnum_sv1 = qnum_cur
+         qaer_sv1 = qaer_cur
+
+         call mam_coag_1subarea(
+            dtsubstep,                               // in
+            temp,      pmid,     aircon,             // in
+            dgn_a,     dgn_awet, wetdens,            // in
+            qnum_cur,  qaer_cur, qaer_delsub_coag_in  )// inout, inout, out
+
+         qnum_delsub_coag = qnum_cur - qnum_sv1
+         qaer_delsub_coag = qaer_cur - qaer_sv1
+
+         qnum_delaa  (:,iqtend_coag) = qnum_delaa  (:,iqtend_coag) + qnum_delsub_coag 
+         qaer_delaa(:,:,iqtend_coag) = qaer_delaa(:,:,iqtend_coag) + qaer_delsub_coag 
+
+      else
+         qaer_delsub_coag_in = 0.0_r8
+         qaer_delsub_coag = 0.0_r8
+         qnum_delsub_coag = 0.0_r8
+      end if
+
+      //====================================
+      // primary carbon aging
+      //====================================
+      do_aging_in_subarea = ( n_agepair>0 ) .and.
+                            ( (.not.iscldy_subarea).or.(iscldy_subarea.and.do_cond_sub) )
+
+      if (do_aging_in_subarea) then
+
+         call mam_pcarbon_aging_1subarea(                         
+            dgn_a,             n_mode,                            // input
+            qnum_cur,          qnum_delsub_cond, qnum_delsub_coag,// in-outs
+            qaer_cur,          qaer_delsub_cond, qaer_delsub_coag,// in-outs
+            qaer_delsub_coag_in)                                    // in-outs
+
+      end if
+
+      // The following block has to be placed here (after both condensation and aging)
+      // as both can change the values of qnum_delsub_cond and qaer_delsub_cond.
+
+      if ( do_cond_sub ) then
+         qnum_delaa  (:,iqtend_cond) = qnum_delaa  (:,iqtend_cond) + qnum_delsub_cond 
+         qaer_delaa(:,:,iqtend_cond) = qaer_delaa(:,:,iqtend_cond) + qaer_delsub_cond 
+      end if
+
+   end do jtsubstep_loop
+   //***********************************
+#endif
+}  // mam_amicphys_1subarea
+//--------------------------------------------------------------------------------
+
 KOKKOS_INLINE_FUNCTION
 void mam_amicphys_1subarea_cloudy(
     const AmicPhysConfig &config, const int nstep, const Real deltat,
@@ -1667,25 +2118,26 @@ void mam_amicphys_1subarea_cloudy(
 
 KOKKOS_INLINE_FUNCTION
 void mam_amicphys_1gridcell(
-    int k, const AmicPhysConfig &config, const int nstep, const Real deltat,
-    const int nsubarea, const int ncldy_subarea,
-    const bool iscldy_subarea[maxsubarea()], const Real afracsub[maxsubarea()],
-    const Real temp, const Real pmid, const Real pdel, const Real zmid,
-    const Real pblh, const Real relhumsub[maxsubarea()],
-    Real dgn_a[AeroConfig::num_modes()], Real dgn_awet[AeroConfig::num_modes()],
-    Real wetdens[AeroConfig::num_modes()],
-    const Real qsub1[AeroConfig::num_gas_ids()][maxsubarea()],
-    const Real qsub2[AeroConfig::num_gas_ids()][maxsubarea()],
-    const Real qqcwsub2[AeroConfig::num_gas_ids()][maxsubarea()],
-    const Real qsub3[AeroConfig::num_gas_ids()][maxsubarea()],
-    const Real qqcwsub3[AeroConfig::num_gas_ids()][maxsubarea()],
-    Real qaerwatsub3[AeroConfig::num_modes()][maxsubarea()],
-    Real qsub4[AeroConfig::num_gas_ids()][maxsubarea()],
-    Real qqcwsub4[AeroConfig::num_gas_ids()][maxsubarea()],
-    Real qaerwatsub4[AeroConfig::num_modes()][maxsubarea()],
-    Real qsub_tendaa[AeroConfig::num_gas_ids()][nqtendaa()][maxsubarea()],
-    Real qqcwsub_tendaa[AeroConfig::num_gas_ids()][nqqcwtendaa()]
-                       [maxsubarea()]) {
+    const int ii, const int kk, const AmicPhysConfig &config, const int nstep,
+    const Real deltat, const int nsubarea, const int ncldy_subarea,
+    const bool (&iscldy_subarea)[maxsubarea()],
+    const Real (&afracsub)[maxsubarea()], const Real temp, const Real pmid,
+    const Real pdel, const Real zmid, const Real pblh,
+    const Real (&relhumsub)[maxsubarea()],
+    Real (&dgn_a)[AeroConfig::num_modes()],
+    Real (&dgn_awet)[AeroConfig::num_modes()],
+    Real (&wetdens)[AeroConfig::num_modes()],
+    const Real (&qsub1)[gas_pcnst()][maxsubarea()],
+    const Real (&qsub2)[gas_pcnst()][maxsubarea()],
+    const Real (&qqcwsub2)[gas_pcnst()][maxsubarea()],
+    const Real (&qsub3)[gas_pcnst()][maxsubarea()],
+    const Real (&qqcwsub3)[gas_pcnst()][maxsubarea()],
+    Real (&qaerwatsub3)[AeroConfig::num_modes()][maxsubarea()],
+    Real (&qsub4)[gas_pcnst()][maxsubarea()],
+    Real (&qqcwsub4)[gas_pcnst()][maxsubarea()],
+    Real (&qaerwatsub4)[AeroConfig::num_modes()][maxsubarea()],
+    Real (&qsub_tendaa)[gas_pcnst()][nqtendaa()][maxsubarea()],
+    Real (&qqcwsub_tendaa)[gas_pcnst()][nqqcwtendaa()][maxsubarea()]) {
   //
   // calculates changes to gas and aerosol sub-area TMRs (tracer mixing
   // ratios) qsub3 and qqcwsub3 are the incoming current TMRs qsub4 and
@@ -1720,13 +2172,15 @@ void mam_amicphys_1gridcell(
       qaerwatsub4[i][j] = qaerwatsub3[i][j];
   for(int i = 0; i < num_gas_ids; ++i)
     for(int j = 0; j < nqtendaa(); ++j)
-      for(int k = 1; k <= maxsubarea(); ++k) qsub_tendaa[i][j][k] = 0;
+      for(int kk = 1; kk <= maxsubarea(); ++kk) qsub_tendaa[i][j][kk] = 0;
   for(int i = 0; i < num_gas_ids; ++i)
     for(int j = 0; j < nqqcwtendaa(); ++j)
-      for(int k = 1; k <= maxsubarea(); ++k) qqcwsub_tendaa[i][j][k] = 0;
+      for(int kk = 1; kk <= maxsubarea(); ++kk) qqcwsub_tendaa[i][j][kk] = 0;
 
   for(int jsub = 1; jsub <= nsubarea; ++jsub) {
     AmicPhysConfig sub_config = config;
+    // FIXME: Remove the code below after removing
+    // mam_amicphys_1subarea_cloudy and mam_amicphys_1subarea_clear
     if(iscldy_subarea[jsub]) {
       sub_config.do_cond   = config.do_cond;
       sub_config.do_rename = config.do_rename;
@@ -1739,29 +2193,51 @@ void mam_amicphys_1gridcell(
       sub_config.do_newnuc = config.do_newnuc;
       sub_config.do_coag   = config.do_coag;
     }
-    if(k == 48)
+    // FIXME: remove the code above ^^^
+    bool do_cond;
+    bool do_rename;
+    bool do_newnuc;
+    bool do_coag;
+    if(iscldy_subarea[jsub]) {
+      do_cond   = config.do_cond;
+      do_rename = config.do_rename;
+      do_newnuc = false;
+      do_coag   = false;
+      if(mdo_gaexch_cldy_subarea <= 0) do_cond = false;
+    } else {
+      do_cond   = config.do_cond;
+      do_rename = config.do_rename;
+      do_newnuc = config.do_newnuc;
+      do_coag   = config.do_coag;
+    }
+
+    if(kk == 48)
       printf("iscldy_subarea:%s, %i\n", iscldy_subarea[jsub] ? "true" : "false",
              jsub);
-    const bool do_map_gas_sub = sub_config.do_cond || sub_config.do_newnuc;
+    const bool do_map_gas_sub = do_cond || do_newnuc;
 
     // map incoming sub-area mix-ratios to gas/aer/num arrays
-    Real qgas1[num_gas_ids] = {0};
-    Real qgas2[num_gas_ids] = {0};
-    Real qgas3[num_gas_ids] = {0};
-    Real qgas4[num_gas_ids] = {0};
-    if(do_map_gas_sub) {
-      // for cldy subarea, only do gases if doing gaexch
-      for(int igas = 0; igas < ngas(); ++igas) {
-        const int l = lmap_gas(igas);
-        qgas1[igas] = qsub1[l][jsub] * fcvt_gas(igas);
-        qgas2[igas] = qsub2[l][jsub] * fcvt_gas(igas);
-        qgas3[igas] = qsub3[l][jsub] * fcvt_gas(igas);
-        qgas4[igas] = qgas3[igas];
-        if(k == 48)
-          printf("qgas4:%0.15e,%0.15e,%0.15e,%0.15e,%i,%i, %i\n", qgas4[igas],
-                 qgas3[igas], qsub3[l][jsub], fcvt_gas(igas), l, igas, jsub);
+    // Initialized to zero; C++ automatically initialze to
+    // all elements to zero if fisrt is initialized to zero as
+    // below
+    Real qgas1[max_gas()] = {0};
+    Real qgas2[max_gas()] = {0};
+    Real qgas3[max_gas()] = {0};
+    Real qgas4[max_gas()] = {0};
+    for(int igas = 0; igas < max_gas(); ++igas)
+      if(do_map_gas_sub) {
+        // for cldy subarea, only do gases if doing gaexch
+        for(int igas = 0; igas < max_gas(); ++igas) {
+          const int l = lmap_gas(igas);
+          qgas1[igas] = qsub1[l][jsub] * fcvt_gas(igas);
+          qgas2[igas] = qsub2[l][jsub] * fcvt_gas(igas);
+          qgas3[igas] = qsub3[l][jsub] * fcvt_gas(igas);
+          qgas4[igas] = qgas3[igas];
+          if(kk == 48)
+            printf("qgas4:%0.15e,%0.15e,%0.15e,%0.15e,%i,%i, %i\n", qgas4[igas],
+                   qgas3[igas], qsub3[l][jsub], fcvt_gas(igas), l, igas, jsub);
+        }
       }
-    }
 
     Real qaer2[num_aerosol_ids][num_modes] = {0};
     Real qnum2[num_modes]                  = {0};
@@ -1771,7 +2247,7 @@ void mam_amicphys_1gridcell(
     Real qnum4[num_modes]                  = {0};
     Real qwtr3[num_modes]                  = {0};
     Real qwtr4[num_modes]                  = {0};
-    
+
     for(int imode = 0; imode < num_modes; ++imode) {
       const int ln = lmap_num(imode);
       qnum2[imode] = qsub2[ln][jsub] * fcvt_num();
@@ -1788,7 +2264,7 @@ void mam_amicphys_1gridcell(
       qwtr3[imode] = qaerwatsub3[imode][jsub] * fcvt_wtr();
       qwtr4[imode] = qwtr3[imode];
     }  // for imode
-    if(k == 48) {
+    if(kk == 48) {
       for(int imode = 0; imode < num_modes; ++imode) {
         printf("NUM_1:%.15e,%.15e,%.15e,%.15e,%.15e,%.15e,%.15e,%i\n",
                qnum2[imode], qnum3[imode], qnum4[imode], qwtr3[imode],
@@ -1804,49 +2280,73 @@ void mam_amicphys_1gridcell(
       }
     }
 
-    /*Real qaer2[num_aerosol_ids][num_modes] = {0};
-    Real qnum2[num_modes]                  = {0};
-    Real qaer3[num_aerosol_ids][num_modes] = {0};
-    Real qnum3[num_modes]                  = {0};
-    Real qaer4[num_aerosol_ids][num_modes] = {0};
-    Real qnum4[num_modes]                  = {0};
-    Real qwtr3[num_modes]                  = {0};
-    Real qwtr4[num_modes]                  = {0};
-    for(int n = 0; n < num_modes; ++n) {
-      qnum3[n] = qsub3[n][jsub] * fcvt_num();
-      qnum4[n] = qnum3[n];
-      for(int iaer = 0; iaer < num_aerosol_ids; ++iaer) {
-        qaer2[iaer][n] = qsub2[iaer][jsub] * fcvt_aer(iaer);
-        qaer3[iaer][n] = qsub3[iaer][jsub] * fcvt_aer(iaer);
-        qaer4[iaer][n] = qaer3[iaer][n];
-      }
-      qwtr3[n] = qaerwatsub3[n][jsub] * fcvt_wtr();
-      qwtr4[n] = qwtr3[n];
-    }*/
+    Real qaercw2[num_aerosol_ids][num_modes] = {0};
+    Real qnumcw2[num_modes]                  = {0};
+    Real qaercw3[num_aerosol_ids][num_modes] = {0};
+    Real qnumcw3[num_modes]                  = {0};
+    Real qaercw4[num_aerosol_ids][num_modes] = {0};
+    Real qnumcw4[num_modes]                  = {0};
 
-    Real qaercw2[num_aerosol_ids][num_modes] = {};
-    Real qaercw3[num_aerosol_ids][num_modes] = {};
-    Real qnumcw3[num_modes]                  = {};
-    Real qaercw4[num_aerosol_ids][num_modes] = {};
-    Real qnumcw4[num_modes]                  = {};
+    // FIXME: Remove the following assignment code:
+    for(int imode = 0; imode < num_modes; ++imode) {
+      qnumcw2[imode] = 999;
+      qnumcw3[imode] = 999;
+      qnumcw4[imode] = 999;
+      for(int iaer = 0; iaer < num_aerosol_ids; ++iaer) {
+        qaercw2[iaer][imode] = 888;
+        qaercw3[iaer][imode] = 888;
+        qaercw4[iaer][imode] = 888;
+      }  // iaer
+    }    // imode
+
+    // FIXME: Remove code above till FIXME
     if(iscldy_subarea[jsub]) {
       // only do cloud-borne for cloudy
-      for(int n = 0; n < num_modes; ++n) {
-        qnumcw3[n] = qqcwsub3[n][jsub] * fcvt_num();
-        qnumcw4[n] = qnumcw3[n];
+      for(int imode = 0; imode < num_modes; ++imode) {
+        int ln         = lmap_num(imode);
+        qnumcw2[imode] = qqcwsub2[ln][jsub] * fcvt_num();
+        qnumcw3[imode] = qqcwsub3[ln][jsub] * fcvt_num();
+        qnumcw4[imode] = qnumcw3[imode];
         for(int iaer = 0; iaer < num_aerosol_ids; ++iaer) {
-          qaercw2[iaer][n] = qqcwsub2[n][jsub] * fcvt_aer(iaer);
-          qaercw3[iaer][n] = qqcwsub3[n][jsub] * fcvt_aer(iaer);
-          qaercw4[iaer][n] = qaercw3[iaer][n];
+          int la = lmap_aer(iaer, imode);
+          if(la > 0) {
+            qaercw2[iaer][imode] = qqcwsub2[la][jsub] * fcvt_aer(iaer);
+            qaercw3[iaer][imode] = qqcwsub3[la][jsub] * fcvt_aer(iaer);
+            if(kk == 48)
+              printf("qaercw3:%.15e,%.15e,%.15e,%i, %i\n", qaercw3[iaer][imode],
+                     qqcwsub3[la][jsub], fcvt_aer(iaer), iaer, imode);
+            qaercw4[iaer][imode] = qaercw3[iaer][imode];
+          }  // la
+        }    // iaer
+      }      // imode
+    }        // iscldy_subarea
+
+    if(kk == 48) {
+      for(int imode = 0; imode < num_modes; ++imode) {
+        printf("NUMCW_1:%.15e,%.15e,%.15e,%i\n", qnumcw2[imode], qnumcw3[imode],
+               qnumcw4[imode], imode);
+        int endind = num_aerosol_ids;
+        if(imode == 1) endind = 4;
+        if(imode == 3) endind = 3;
+        for(int iaer = 0; iaer < endind; ++iaer) {
+          printf("qaerCW_1:%.15e,%.15e,%.15e,%i, %i\n", qaercw2[iaer][imode],
+                 qaercw3[iaer][imode], qaercw4[iaer][imode], iaer, imode);
         }
       }
     }
 
-    Real qgas_delaa[num_gas_ids][nqtendaa()]                     = {};
+    Real qgas_delaa[max_gas()][nqtendaa()]                       = {};
     Real qnum_delaa[num_modes][nqtendaa()]                       = {};
     Real qnumcw_delaa[num_modes][nqqcwtendaa()]                  = {};
     Real qaer_delaa[num_aerosol_ids][num_modes][nqtendaa()]      = {};
     Real qaercw_delaa[num_aerosol_ids][num_modes][nqqcwtendaa()] = {};
+
+    mam_amicphys_1subarea(
+        do_cond, do_rename, do_newnuc, do_coag, ii, kk, deltat, jsub, nsubarea,
+        iscldy_subarea, afracsub, temp, pmid, pdel, zmid, pblh, relhumsub,
+        dgn_a, dgn_awet, wetdens, qgas1, qgas3, qgas4, qgas_delaa, qnum3, qnum4,
+        qnum_delaa, qaer2, qaer3, qaer4, qaer_delaa, qwtr3, qwtr4, qnumcw3,
+        qnumcw4, qnumcw_delaa, qaercw2, qaercw3, qaercw4, qaercw_delaa);
 
     if(iscldy_subarea[jsub]) {
       mam_amicphys_1subarea_cloudy(
@@ -1865,10 +2365,10 @@ void mam_amicphys_1gridcell(
       // arrays
 
       if(do_map_gas_sub) {
-        for(int igas = 0; igas < ngas(); ++igas) {
+        for(int igas = 0; igas < max_gas(); ++igas) {
           const int l    = lmap_gas(igas);
           qsub4[l][jsub] = qgas4[igas] / fcvt_gas(igas);
-          if(k == 48)
+          if(kk == 48)
             printf("qsub4:%0.15e,%0.15e,%0.15e,%i,%i,%i\n", qsub4[l][jsub],
                    qgas4[igas], fcvt_gas(igas), l, jsub, igas);
           for(int i = 0; i < nqtendaa(); ++i)
@@ -1908,7 +2408,7 @@ void mam_amicphys_1gridcell(
 }  // anonymous namespace
 
 KOKKOS_INLINE_FUNCTION
-void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
+void modal_aero_amicphys_intr(int ii, int kk, const AmicPhysConfig &config,
                               const int nstep, const Real deltat,
                               const Real temp, const Real pmid, const Real pdel,
                               const Real zm, const Real pblh, const Real qv,
@@ -2008,7 +2508,7 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
   // Saturation specific humidity
   Real qv_sat = epsqs * ev_sat /
                 (pmid - (1 - epsqs) * ev_sat);  // BALLI: make it a const var
-  if(k == 48) {
+  if(kk == 48) {
     const Real qv_sat_hardwired = 7.614546931278814E-003;
     qv_sat                      = qv_sat_hardwired;
   }
@@ -2022,12 +2522,12 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
   Real fcldy;                         // in  cloudy fraction of the grid cell
   Real fclea;                         // in clear  fraction of the grid cell
 
-  setup_subareas(k, cld,                                   // in
+  setup_subareas(kk, cld,                                  // in
                  nsubarea, ncldy_subarea, jclea, jcldy,    // out
                  iscldy_subarea, afracsub, fclea, fcldy);  // out
 
   const Real relhumgcm = haero::max(0.0, haero::min(1.0, qv / qv_sat));
-  if(k == 48) {
+  if(kk == 48) {
     printf("QSAT:%.15e,%.15e,%.15e,%.15e,%.15e,%.15e\n", qv_sat, qv, pmid, temp,
            epsqs, ev_sat);
   }
@@ -2063,7 +2563,7 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
     qqcwgcm2[icnst] = haero::max(0, qqcw_precldchem[icnst]);
     qqcwgcm3[icnst] = haero::max(0, qqcw[icnst]);
   }
-  if(k == 48) {
+  if(kk == 48) {
     for(int icnst = 0; icnst < 6; ++icnst) {
       printf("amic2a:%.15e,%.15e,%.15e, %i\n", qgcm1[icnst], qgcm2[icnst],
              qgcm3[icnst], icnst);
@@ -2077,18 +2577,19 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
   Real qqcwsub2[gas_pcnst()][maxsubarea()];
   Real qqcwsub3[gas_pcnst()][maxsubarea()];
 
-  set_subarea_gases_and_aerosols(k, nsubarea, jclea, jcldy, fclea, fcldy,  // in
+  set_subarea_gases_and_aerosols(kk, nsubarea, jclea, jcldy, fclea,
+                                 fcldy,                                    // in
                                  qgcm1, qgcm2, qqcwgcm2, qgcm3, qqcwgcm3,  // in
                                  qsub1, qsub2, qqcwsub2, qsub3,  // out
                                  qqcwsub3);                      // out
-  if(k == 48) {
+  if(kk == 48) {
     printf("amic1:%i,%i,%i,%i,%s,%s,%.15e,%.15e,%.15e,%.15e\n", nsubarea,
            ncldy_subarea, jclea, jcldy, iscldy_subarea[1] ? "true" : "false",
            iscldy_subarea[2] ? "true" : "false", afracsub[1], afracsub[2],
            relhumsub[1], relhumsub[2]);
   }
 
-  if(k == 48) {
+  if(kk == 48) {
     for(int ii = 0; ii < AeroConfig::num_modes(); ++ii) {
       for(int jj = 0; jj < maxsubarea(); ++jj) {
         // printf("amic2:%.15e,%i, %i\n", qaerwatsub3[ii][jj], ii, jj);
@@ -2096,12 +2597,12 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
     }
   }
 
-  if(k == 48) {
+  if(kk == 48) {
     for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
       // printf("lmapcc_aa:%i, %i\n", lmapcc_all(icnst), icnst);
     }
   }
-  if(k == 48) {
+  if(kk == 48) {
     for(int jsub = 1; jsub < maxsubarea(); ++jsub) {
       for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
         printf("amic3:%.15e,%.15e,%.15e,%.15e,%.15e,%i, %i\n",
@@ -2127,7 +2628,7 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
     dgn_a[n]    = dgncur_a[n];
     dgn_awet[n] = dgncur_awet[n];
     wetdens[n]  = haero::max(1000.0, wetdens_host[n]);
-    if(k == 48) {
+    if(kk == 48) {
       printf("dgn_a:%0.15e, %i\n", dgn_a[n], n);
       printf("dgn_awet:%0.15e, %i\n", dgn_awet[n], n);
       printf("wetdens:%0.15e, %i\n", wetdens[n], n);
@@ -2137,16 +2638,16 @@ void modal_aero_amicphys_intr(int k, const AmicPhysConfig &config,
   Real qsub_tendaa[gas_pcnst()][nqtendaa()][maxsubarea()]       = {};
   Real qqcwsub_tendaa[gas_pcnst()][nqqcwtendaa()][maxsubarea()] = {};
   mam_amicphys_1gridcell(
-      k, config, nstep, deltat, nsubarea, ncldy_subarea,  // in
-      iscldy_subarea, afracsub, temp, pmid, pdel, zm,     // in
-      pblh,                                               // in
-      relhumsub,                                          // in
+      ii, kk, config, nstep, deltat, nsubarea, ncldy_subarea,  // in
+      iscldy_subarea, afracsub, temp, pmid, pdel, zm,          // in
+      pblh,                                                    // in
+      relhumsub,                                               // in
       // FIXME: dgn_a, dgn_awet, wetdens seems like "in", confirm it
       dgn_a, dgn_awet, wetdens,                   // inout
       qsub1, qsub2, qqcwsub2, qsub3, qqcwsub3,    // in
       qaerwatsub3, qsub4, qqcwsub4, qaerwatsub4,  // inout
       qsub_tendaa, qqcwsub_tendaa);               // inout
-  if(k == 48) {
+  if(kk == 48) {
     for(int n = 0; n < num_modes; ++n) {
       printf("AFT:dgn_a:%0.15e, %i\n", dgn_a[n], n);
       printf("AFT:dgn_awet:%0.15e, %i\n", dgn_awet[n], n);
