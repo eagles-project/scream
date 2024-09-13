@@ -55,6 +55,7 @@ KOKKOS_INLINE_FUNCTION constexpr int iqtend_nnuc() { return 2; }
 KOKKOS_INLINE_FUNCTION constexpr int iqtend_coag() { return 3; }
 KOKKOS_INLINE_FUNCTION constexpr int iqtend_cond_only() { return 4; }
 KOKKOS_INLINE_FUNCTION constexpr int iqqcwtend_rnam() { return 1; }
+KOKKOS_INLINE_FUNCTION constexpr int n_agepair() { return 1; }
 // FIXME: Add comments why maxareas is 3!!!
 KOKKOS_INLINE_FUNCTION constexpr int maxsubarea() { return 3; }
 // In state_q, we have 40 species, the gasses and aerosols starts after the
@@ -1290,18 +1291,18 @@ void mam_amicphys_1subarea_clear(
 //--------------------------------------------------------------------------------
 
 KOKKOS_INLINE_FUNCTION
-void copy_1d_array(const int &arr_len, const Real *arr_in,  // in
-                   Real *arr_out) {                         // out
+void copy_1d_array(const int arr_len, const Real (&arr_in)[arr_len],  // in
+                   Real (&arr_out)[arr_len]) {                        // out
   for(int ii = 0; ii < arr_len; ++ii) {
     arr_out[ii] = arr_in[ii];
   }
 }
 
 KOKKOS_INLINE_FUNCTION
-void copy_2d_array(const int first_dimlen,                          // in
-                   const int second_dimlen,                         // in
-                   const Real arr_in[first_dimlen][second_dimlen],  // in
-                   Real arr_out[first_dimlen][second_dimlen]) {     // out
+void copy_2d_array(const int first_dimlen,                             // in
+                   const int second_dimlen,                            // in
+                   const Real (&arr_in)[first_dimlen][second_dimlen],  // in
+                   Real (&arr_out)[first_dimlen][second_dimlen]) {     // out
 
   for(int ifd = 0; ifd < first_dimlen; ++ifd) {
     for(int isd = 0; isd < second_dimlen; ++isd) {
@@ -1309,21 +1310,20 @@ void copy_2d_array(const int first_dimlen,                          // in
     }
   }
 }
-template <typename T>
+template <typename DT>
 KOKKOS_INLINE_FUNCTION void assign_1d_array(const int arr_len,
-                                            const T num,   // in
-                                            T *arr_out) {  // out
+                                            const DT num,   // in
+                                            DT *arr_out) {  // out
   for(int ii = 0; ii < arr_len; ++ii) {
     arr_out[ii] = num;
   }
 }
 
 KOKKOS_INLINE_FUNCTION
-void assign_2d_array(const int first_dimlen,                       // in
-                     const int second_dimlen,                      // in
-                     const Real num,                               // in
-                     Real arr_out[first_dimlen][second_dimlen]) {  // out
-
+void assign_2d_array(const int first_dimlen,                          // in
+                     const int second_dimlen,                         // in
+                     const Real num,                                  // in
+                     Real (&arr_out)[first_dimlen][second_dimlen]) {  // out
   for(int ifd = 0; ifd < first_dimlen; ++ifd) {
     for(int isd = 0; isd < second_dimlen; ++isd) {
       arr_out[ifd][isd] = num;
@@ -1333,11 +1333,11 @@ void assign_2d_array(const int first_dimlen,                       // in
 // copy 3d arrays
 KOKKOS_INLINE_FUNCTION
 void assign_3d_array(
-    const int first_dimlen,                                     // in
-    const int second_dimlen,                                    // in
-    const int third_dimlen,                                     // in
-    const Real num,                                             // in
-    Real arr_out[first_dimlen][second_dimlen][third_dimlen]) {  // out
+    const int first_dimlen,                                        // in
+    const int second_dimlen,                                       // in
+    const int third_dimlen,                                        // in
+    const Real num,                                                // in
+    Real (&arr_out)[first_dimlen][second_dimlen][third_dimlen]) {  // out
   for(int ifd = 0; ifd < first_dimlen; ++ifd) {
     for(int isd = 0; isd < second_dimlen; ++isd) {
       for(int itd = 0; itd < third_dimlen; ++itd) {
@@ -1893,33 +1893,43 @@ void mam_amicphys_1subarea(
                       qnum_delsub_coag);           // out
 
     }  // do_coag_sub
-#if 0
-      //====================================
-      // primary carbon aging
-      //====================================
-      do_aging_in_subarea = ( n_agepair>0 ) .and.
-                            ( (.not.iscldy_subarea).or.(iscldy_subarea.and.do_cond_sub) )
 
-      if (do_aging_in_subarea) then
+    //====================================
+    // primary carbon aging
+    //====================================
+    const bool do_aging_in_subarea =
+        (n_agepair() > 0) &&
+        ((!iscldy_subarea) || (iscldy_subarea && do_cond_sub));
 
-         call mam_pcarbon_aging_1subarea(                         
-            dgn_a,             n_mode,                            // input
-            qnum_cur,          qnum_delsub_cond, qnum_delsub_coag,// in-outs
-            qaer_cur,          qaer_delsub_cond, qaer_delsub_coag,// in-outs
-            qaer_delsub_coag_in)                                    // in-outs
+    if(do_aging_in_subarea) {
+      mam4::aging::mam_pcarbon_aging_1subarea(
+          dgn_a,                                         // input
+          qnum_cur, qnum_delsub_cond, qnum_delsub_coag,  // in-outs
+          qaer_cur, qaer_delsub_cond, qaer_delsub_coag,  // in-outs
+          qaer_delsub_coag_in);                          // in-outs
+    }                                                    // do_aging_in_subarea
 
-      end if
+    // The following block has to be placed here (after both condensation and
+    // aging) as both can change the values of qnum_delsub_cond and
+    // qaer_delsub_cond.
 
-      // The following block has to be placed here (after both condensation and aging)
-      // as both can change the values of qnum_delsub_cond and qaer_delsub_cond.
-
-      if ( do_cond_sub ) then
-         qnum_delaa  (:,iqtend_cond) = qnum_delaa  (:,iqtend_cond) + qnum_delsub_cond 
-         qaer_delaa(:,:,iqtend_cond) = qaer_delaa(:,:,iqtend_cond) + qaer_delsub_cond 
-      end if
-#endif
-  }  // jtsubstep_loop
-     //***********************************
+    if(do_cond_sub) {
+      for(int im = 0; im < nmodes; ++im) {
+        for(int iq = 0; iq < iqtend_cond(); ++iq) {
+          qnum_delaa[im][iq] = qnum_delaa[im][iq] + qnum_delsub_cond[im];
+        }
+      }
+      for(int is = 0; is < nspecies; ++is) {
+        for(int im = 0; im < nmodes; ++im) {
+          for(int iq = 0; iq < iqtend_cond(); ++iq) {
+            qaer_delaa[is][im][iq] =
+                qaer_delaa[is][im][iq] + qaer_delsub_cond[is][im];
+          }
+        }
+      }
+    }  // do_cond_sub
+  }    // jtsubstep_loop
+       //***********************************
 
 }  // mam_amicphys_1subarea
 //--------------------------------------------------------------------------------
