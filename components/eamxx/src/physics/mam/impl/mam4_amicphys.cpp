@@ -1285,21 +1285,83 @@ void mam_amicphys_1subarea_clear(
     }
   }
 }
+//--------------------------------------------------------------------------------
+// Utility functions
+//--------------------------------------------------------------------------------
+
+KOKKOS_INLINE_FUNCTION
+void copy_1d_array(const int &arr_len, const Real *arr_in,  // in
+                   Real *arr_out) {                         // out
+  for(int ii = 0; ii < arr_len; ++ii) {
+    arr_out[ii] = arr_in[ii];
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void copy_2d_array(const int first_dimlen,                          // in
+                   const int second_dimlen,                         // in
+                   const Real arr_in[first_dimlen][second_dimlen],  // in
+                   Real arr_out[first_dimlen][second_dimlen]) {     // out
+
+  for(int ifd = 0; ifd < first_dimlen; ++ifd) {
+    for(int isd = 0; isd < second_dimlen; ++isd) {
+      arr_out[ifd][isd] = arr_in[ifd][isd];
+    }
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void assign_1d_array(const int arr_len, const Real num,  // in
+                     Real *arr_out) {       // out
+  for(int ii = 0; ii < arr_len; ++ii) {
+    arr_out[ii] = 0;
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void assign_2d_array(const int first_dimlen,                       // in
+                     const int second_dimlen,                      // in
+                     const Real num,                               // in
+                     Real arr_out[first_dimlen][second_dimlen]) {  // out
+
+  for(int ifd = 0; ifd < first_dimlen; ++ifd) {
+    for(int isd = 0; isd < second_dimlen; ++isd) {
+      arr_out[ifd][isd] = num;
+    }
+  }
+}
+// copy 3d arrays
+KOKKOS_INLINE_FUNCTION
+void assign_3d_array(
+    const int first_dimlen,                                     // in
+    const int second_dimlen,                                    // in
+    const int third_dimlen,                                     // in
+    const Real num,                                             // in
+    Real arr_out[first_dimlen][second_dimlen][third_dimlen]) {  // out
+  for(int ifd = 0; ifd < first_dimlen; ++ifd) {
+    for(int isd = 0; isd < second_dimlen; ++isd) {
+      for(int itd = 0; itd < third_dimlen; ++itd) {
+        arr_out[ifd][isd][itd] = num;
+      }
+    }
+  }
+}
 
 //--------------------------------------------------------------------------------
 // Call aerosol microphysics processes for a single (cloudy or clear) subarea
 // (with indices = lchnk,ii,kk,jsubarea)
 //
 // qgas3, qaer3, qaercw3, qnum3, qnumcw3 are the current incoming TMRs
-// qgas_cur, qaer_cur, qaercw_cur, qnum_cur, qnumcw_cur are the updated outgoing
-// TMRs
+// qgas_cur, qaer_cur, qaercw_cur, qnum_cur, qnumcw_cur are the updated
+// outgoing TMRs
 //
 // In a clear subarea, calculate
 //  - gas-aerosol exchange (condensation/evaporation)
 //  - growth from smaller to larger modes (renaming) due to condensation
 //  - new particle nucleation
 //  - coagulation
-//  - transfer of particles from hydrophobic modes to hydrophilic modes (aging)
+//  - transfer of particles from hydrophobic modes to hydrophilic modes
+//  (aging)
 //    due to condensation and coagulation
 //
 // In a cloudy subarea,
@@ -1308,13 +1370,15 @@ void mam_amicphys_1subarea_clear(
 //    so gas TMRs are not changed
 //  - when do_cond = true, this routine also calculates changes involving
 //    gas-aerosol exchange (condensation/evaporation)
-//  - transfer of particles from hydrophobic modes to hydrophilic modes (aging)
+//  - transfer of particles from hydrophobic modes to hydrophilic modes
+//  (aging)
 //       due to condensation
 // Currently, in a cloudy subarea, this routine does not do
 //  - new particle nucleation - because h2so4 gas conc. should be very low in
 //  cloudy air
 //  - coagulation - because cloud-borne aerosol would need to be included
 //--------------------------------------------------------------------------------
+KOKKOS_INLINE_FUNCTION
 void mam_amicphys_1subarea(
     // in
     const Real gaexch_h2so4_uptake_optaa, const bool do_cond_sub,
@@ -1412,8 +1476,8 @@ void mam_amicphys_1subarea(
   // qwtr_cur   [kmol/kmol]
 
   // qXXX_delaa are TMR changes (increments, not tendencies) of different
-  // microphysics processes. These are diagnostics sent to history output; they
-  // do not directly affect time integration.
+  // microphysics processes. These are diagnostics sent to history output;
+  // they do not directly affect time integration.
 
   // qgas_delaa   [kmol/kmol]
   // qnum_delaa   [   #/kmol]
@@ -1427,38 +1491,38 @@ void mam_amicphys_1subarea(
   // Calculate air molar density [kmol/m3] to be passed on to individual
   // parameterizations
   //---------------------------------------------------------------------------------------
-  constexpr Real r_universal =
-      8314.46759100000;  // Universal gas constant (J/K/kmol)
-  const Real aircon = pmid / (r_universal * temp);
+  // BAD CONSTANT
+  // Universal gas constant (J/K/kmol)
+  constexpr Real r_universal = 8314.46759100000;
+  const Real aircon          = pmid / (r_universal * temp);
 
   //----------------------------------------------------------
   // Initializ mixing ratios with the before-amicphys values
   //----------------------------------------------------------
-  for(int igas = 0; igas < max_gas(); ++igas) {
-    qgas_cur[igas] = qgas3[igas];
-  }
+
+  copy_1d_array(max_gas(), qgas3,  // in
+                qgas_cur);         // out
+
   if(kk == 48)
     printf("qgas_cur1:%0.15e,%0.15e,%0.15e\n", qgas_cur[0], qgas_cur[1],
            aircon);
 
-  for(int iaer = 0; iaer < AeroConfig::num_aerosol_ids(); ++iaer) {
-    for(int imode = 0; imode < AeroConfig::num_modes(); ++imode) {
-      qaer_cur[iaer][imode] = qaer3[iaer][imode];
-    }
-  }
+  copy_2d_array(AeroConfig::num_aerosol_ids(),   // in
+                AeroConfig::num_modes(), qaer3,  // in
+                qaer_cur);                       // out
 
-  for(int imode = 0; imode < AeroConfig::num_modes(); ++imode) {
-    qnum_cur[imode] = qnum3[imode];
-    qwtr_cur[imode] = qwtr3[imode];
-  }
+  copy_1d_array(AeroConfig::num_modes(), qnum3,  // in
+                qnum_cur);                       // out
+
+  copy_1d_array(AeroConfig::num_modes(), qwtr3,  // in
+                qwtr_cur);                       // out
 
   if(iscldy_subarea) {
-    for(int imode = 0; imode < AeroConfig::num_modes(); ++imode) {
-      qnumcw_cur[imode] = qnumcw3[imode];
-      for(int iaer = 0; iaer < AeroConfig::num_aerosol_ids(); ++iaer) {
-        qaercw_cur[iaer][imode] = qaercw3[iaer][imode];
-      }
-    }
+    copy_1d_array(AeroConfig::num_modes(), qnumcw3,  // in
+                  qnumcw_cur);
+    copy_2d_array(AeroConfig::num_aerosol_ids(),     // in
+                  AeroConfig::num_modes(), qaercw3,  // in
+                  qaercw_cur);
   }  // iscldy_subarea
 
   if(kk == 48) {
@@ -1504,29 +1568,24 @@ void mam_amicphys_1subarea(
   // Initialize increment diagnostics
   //-----------------------------------
 
-  for(int igas = 0; igas < max_gas(); ++igas) {
-    for(int inq = 0; inq < nqtendaa(); ++inq) {
-      qgas_delaa[igas][inq] = 0;
-    }
-  }
+  assign_2d_array(max_gas(), nqtendaa(), 0,  // in
+                  qgas_delaa);               // out
 
-  for(int imode = 0; imode < AeroConfig::num_modes(); ++imode) {
-    for(int inq = 0; inq < nqtendaa(); ++inq) {
-      qnum_delaa[imode][inq] = 0;
-      for(int iaer = 0; iaer < AeroConfig::num_aerosol_ids(); ++iaer) {
-        qaer_delaa[iaer][imode][inq] = 0;
-      }
-    }
-  }
+  assign_2d_array(AeroConfig::num_modes(), nqtendaa(), 0,  // in
+                  qnum_delaa);                             // out
 
-  for(int imode = 0; imode < AeroConfig::num_modes(); ++imode) {
-    for(int inq = 0; inq < nqqcwtendaa(); ++inq) {
-      qnumcw_delaa[imode][inq] = 0;
-      for(int iaer = 0; iaer < AeroConfig::num_aerosol_ids(); ++iaer) {
-        qaercw_delaa[iaer][imode][inq] = 0;
-      }
-    }
-  }
+  assign_3d_array(AeroConfig::num_aerosol_ids(),  // in
+                  AeroConfig::num_modes(),        // in
+                  nqtendaa(), 0,                  // in
+                  qaer_delaa);                    // out
+
+  assign_2d_array(AeroConfig::num_modes(), nqqcwtendaa(), 0,  // in
+                  qnumcw_delaa);                              // out
+
+  assign_3d_array(AeroConfig::num_aerosol_ids(),
+                  AeroConfig::num_modes(),  // in
+                  nqqcwtendaa(), 0,         // in
+                  qaercw_delaa);            // out
 
   Real ncluster_tend_nnuc_1grid = 0;
 
@@ -1539,6 +1598,28 @@ void mam_amicphys_1subarea(
   Real qgas_sv1[max_gas()];
   Real qnum_sv1[AeroConfig::num_modes()];
   Real qaer_sv1[AeroConfig::num_aerosol_ids()][AeroConfig::num_modes()];
+
+  Real del_h2so4_aeruptk;    // [kmol/kmol]
+  Real qgas_avg[max_gas()];  // [kmol/kmol]
+
+  // Mixing ratio increments of sub-timesteps used for process coupling
+
+  Real qnum_delsub_cond[AeroConfig::num_modes()];  // [   #/kmol]
+  Real qnum_delsub_coag[AeroConfig::num_modes()];  // [   #/kmol]
+  Real qaer_delsub_cond[AeroConfig::num_aerosol_ids()]
+                       [AeroConfig::num_modes()];  // [   #/kmol]
+
+  Real qaer_delsub_coag[AeroConfig::num_aerosol_ids()]
+                       [AeroConfig::num_modes()];  // [kmol/kmol]
+
+  Real qaer_delsub_grow4rnam[AeroConfig::num_aerosol_ids()]
+                            [AeroConfig::num_modes()];  // [kmol/kmol]
+
+  Real qaercw_delsub_grow4rnam[AeroConfig::num_aerosol_ids()]
+                              [AeroConfig::num_modes()];  // [kmol/kmol]
+
+  Real qaer_delsub_coag_in[AeroConfig::num_aerosol_ids()]
+                          [AeroConfig::max_agepair()];  // [kmol/kmol]
 
   for(int jtsubstep = 0; jtsubstep < ntsubstep; ++jtsubstep) {
     //======================
@@ -1583,20 +1664,26 @@ void mam_amicphys_1subarea(
 
          del_h2so4_aeruptk = qgas_cur(igas_h2so4)
                            - (qgas_sv1(igas_h2so4) + qgas_netprod_otrproc(igas_h2so4)*dtsubstep)
-
-    }else{ // do_cond_sub
-
-        qgas_avg(1:ngas) = qgas_cur(1:ngas)
-        qaer_delsub_cond = 0;
-        qnum_delsub_cond = 0;
-        del_h2so4_aeruptk = 0;
 #endif
+    } else {                              // do_cond_sub
+      copy_1d_array(max_gas(), qgas_cur,  // in
+                    qgas_avg);            // out
+
+      assign_2d_array(AeroConfig::num_aerosol_ids(),  // in
+                      AeroConfig::num_modes(),        // in
+                      0,                              // in
+                      qaer_delsub_cond);              // out
+
+      assign_1d_array(AeroConfig::num_modes(), 0,  // in
+                      qnum_delsub_cond);           // out
+      del_h2so4_aeruptk = 0;
+
     }  // do_cond_sub
-#if 0
+
       //====================================
       // Renaming after "continuous growth"
       //====================================
-      if ( do_rename_sub ) then
+      if ( do_rename_sub ) {
 
          dest_mode_of_mode(:) = 0
          dest_mode_of_mode(nait) = nacc
@@ -1621,7 +1708,7 @@ void mam_amicphys_1subarea(
 
          qnumcw_sv1 = qnumcw_cur
          qaercw_sv1 = qaercw_cur
-
+#if 0
          call mam_rename_1subarea(                         
             iscldy_subarea,                                
             dest_mode_of_mode, n_mode,                     
@@ -1638,9 +1725,9 @@ void mam_amicphys_1subarea(
             qnumcw_delaa  (:,iqqcwtend_rnam) = qnumcw_delaa  (:,iqqcwtend_rnam) + (qnumcw_cur - qnumcw_sv1) 
             qaercw_delaa(:,:,iqqcwtend_rnam) = qaercw_delaa(:,:,iqqcwtend_rnam) + (qaercw_cur - qaercw_sv1)
          end if
-
-      end if //do_rename_sub
-
+#endif
+      } //do_rename_sub
+#if 0
       //====================================
       // New particle formation (nucleation)
       //====================================
