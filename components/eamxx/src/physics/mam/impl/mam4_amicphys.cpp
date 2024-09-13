@@ -1812,11 +1812,14 @@ void mam_amicphys_1subarea(
     // New particle formation (nucleation)
     //====================================
     if(do_newnuc_sub) {
-#if 0
-         qgas_sv1 = qgas_cur
-         qnum_sv1 = qnum_cur
-         qaer_sv1 = qaer_cur
+      copy_1d_array(max_gas(), qgas_cur,  // in
+                    qgas_sv1);            // out
+      copy_1d_array(nmodes, qnum_cur,     // in
+                    qnum_sv1);            // out
 
+      copy_2d_array(nspecies, nmodes, qaer_cur,  // in
+                    qaer_sv1);                   // out
+#if 0
          call mam_newnuc_1subarea(                                    
             nstep,             lchnk,                                 
             ii,                kk,               jsubarea,            
@@ -1840,33 +1843,57 @@ void mam_amicphys_1subarea(
          misc_vars_aa_sub%ncluster_tend_nnuc_1grid + dnclusterdt_substep*(dtsubstep/deltat)
 #endif
     }  // do_newnuc_sub
+
+    //====================================
+    // Coagulation
+    //====================================
+    if(do_coag_sub) {
+      copy_1d_array(nmodes, qnum_cur,  // in
+                    qnum_sv1);         // out
+
+      copy_2d_array(nspecies, nmodes, qaer_cur,  // in
+                    qaer_sv1);                   // out
+
+      mam4::coagulation::mam_coag_1subarea(
+          dtsubstep,                                 // in
+          temp, pmid, aircon,                        // in
+          dgn_a, dgn_awet, wetdens,                  // in
+          qnum_cur, qaer_cur, qaer_delsub_coag_in);  // inout, inout, out
+
+      for(int im = 0; im < nmodes; ++im) {
+        qnum_delsub_coag[im] = qnum_cur[im] - qnum_sv1[im];
+      }
+
+      for(int is = 0; is < nspecies; ++is) {
+        for(int im = 0; im < nmodes; ++im) {
+          qaer_delsub_coag[is][im] = qaer_cur[is][im] - qaer_sv1[is][im];
+        }
+      }
+
+      for(int im = 0; im < nmodes; ++im) {
+        for(int iq = 0; iq < iqtend_coag(); ++iq) {
+          qnum_delaa[im][iq] = qnum_delaa[im][iq] + qnum_delsub_coag[im];
+        }
+      }
+      for(int is = 0; is < nspecies; ++is) {
+        for(int im = 0; im < nmodes; ++im) {
+          for(int iq = 0; iq < iqtend_coag(); ++iq) {
+            qaer_delaa[is][im][iq] =
+                qaer_delaa[is][im][iq] + qaer_delsub_coag[is][im];
+          }
+        }
+      }
+
+    } else {
+      assign_2d_array(nspecies, max_agepair, 0.0,  // in
+                      qaer_delsub_coag_in);        // out
+      assign_2d_array(nspecies, nmodes, 0.0,       // in
+                      qaer_delsub_coag);           // out
+      assign_1d_array(nmodes, 0.0,                 // in
+                      qnum_delsub_coag);           // out
+
+    }  // do_coag_sub
 #if 0
-      //====================================
-      // Coagulation
-      //====================================
-      if ( do_coag_sub ) then
-
-         qnum_sv1 = qnum_cur
-         qaer_sv1 = qaer_cur
-
-         call mam_coag_1subarea(
-            dtsubstep,                               // in
-            temp,      pmid,     aircon,             // in
-            dgn_a,     dgn_awet, wetdens,            // in
-            qnum_cur,  qaer_cur, qaer_delsub_coag_in  )// inout, inout, out
-
-         qnum_delsub_coag = qnum_cur - qnum_sv1
-         qaer_delsub_coag = qaer_cur - qaer_sv1
-
-         qnum_delaa  (:,iqtend_coag) = qnum_delaa  (:,iqtend_coag) + qnum_delsub_coag 
-         qaer_delaa(:,:,iqtend_coag) = qaer_delaa(:,:,iqtend_coag) + qaer_delsub_coag 
-
-      else
-         qaer_delsub_coag_in = 0.0_r8
-         qaer_delsub_coag = 0.0_r8
-         qnum_delsub_coag = 0.0_r8
-      end if
-
       //====================================
       // primary carbon aging
       //====================================
