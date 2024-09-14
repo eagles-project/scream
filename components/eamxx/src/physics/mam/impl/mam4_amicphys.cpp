@@ -1656,37 +1656,27 @@ void mam_amicphys_1subarea(
 
       copy_1d_array(nmodes, qnum_cur_tmp,  // in
                     qnum_cur);             // out
+      for(int ig = 0; ig < max_gas(); ++ig) {
+        for(int iq = 0; iq < iqtend_cond(); ++iq) {
+          qgas_delaa[ig][iq] =
+              qgas_delaa[ig][iq] +
+              (qgas_cur[ig] -
+               (qgas_sv1[ig] + qgas_netprod_otrproc[ig] * dtsubstep));
+        }
+      }
+      for(int im = 0; im < nmodes; ++im) {
+        qnum_delsub_cond[im] = qnum_cur[im] - qnum_sv1[im];
+      }
+      for(int is = 0; is < nspecies; ++is) {
+        for(int im = 0; im < nmodes; ++im) {
+          qaer_delsub_cond[is][im] = qaer_cur[is][im] - qaer_sv1[is][im];
+        }
+      }
 
-#if 0
-    /*       void mam_gasaerexch_1subarea(
-    const int jtsubstep,                // in
-    const Real dtsubstep,               // in
-    const Real temp,                    // in
-    const Real pmid,                    // in
-    const Real aircon,                  // in
-    const int n_mode,                   // in
-    Real qgas_cur[gasaerexch::max_gas], // in/out
-    Real qgas_avg[gasaerexch::max_gas], // in/out
-    const Real qgas_netprod_otrproc[gasaerexch::max_gas],
-    Real qaer_cur[gasaerexch::max_aer][mam4::gasaerexch::max_mode],
-    Real qnum_cur[gasaerexch::max_mode], Real qwtr_cur[gasaerexch::max_mode],
-    Real dgn_a[gasaerexch::max_mode], Real dgn_awet[gasaerexch::max_mode],
-    Real wetdens[gasaerexch::max_mode],
-    Real uptkaer[gasaerexch::max_gas][mam4::gasaerexch::max_mode],
-    Real &uptkrate_h2so4)*/
+      del_h2so4_aeruptk =
+          qgas_cur[igas_h2so4] -
+          (qgas_sv1[igas_h2so4] + qgas_netprod_otrproc[igas_h2so4] * dtsubstep);
 
-
-
-           if(print_out .and. ii==icolprnt(lchnk) .and. kk==kprnt) write(106,*)'qgas_cur3:',qgas_cur(1),qgas_cur(2)
-
-         qgas_delaa(:,iqtend_cond) = qgas_delaa(:,iqtend_cond) + (qgas_cur - (qgas_sv1 + qgas_netprod_otrproc*dtsubstep)) 
-
-         qnum_delsub_cond = qnum_cur - qnum_sv1
-         qaer_delsub_cond = qaer_cur - qaer_sv1
-
-         del_h2so4_aeruptk = qgas_cur(igas_h2so4)
-                           - (qgas_sv1(igas_h2so4) + qgas_netprod_otrproc(igas_h2so4)*dtsubstep)
-#endif
     } else {                              // do_cond_sub
       copy_1d_array(max_gas(), qgas_cur,  // in
                     qgas_avg);            // out
@@ -1788,13 +1778,12 @@ void mam_amicphys_1subarea(
       }
       Rename rename;
       rename.mam_rename_1subarea_(
-          iscldy_subarea, smallest_dryvol_value, dest_mode_of_mode,   // in
-          mean_std_dev, fmode_dist_tail_fac, v2n_lo_rlx, v2n_hi_rlx,  // in
-          ln_diameter_tail_fac, num_pairs, diameter_cutoff,           // in
-          ln_dia_cutoff,                                              // in
-          diameter_threshold, mass_2_vol, dgnum_amode,                // in
-          qnum_cur, qaer_cur_tmp, qaer_delsub_grow4rnam_tmp,          // out
-          qnumcw_cur, qaercw_cur_tmp, qaercw_delsub_grow4rnam_tmp);   // out
+          iscldy_subarea, smallest_dryvol_value, dest_mode_of_mode,    // in
+          mean_std_dev, fmode_dist_tail_fac, v2n_lo_rlx, v2n_hi_rlx,   // in
+          ln_diameter_tail_fac, num_pairs, diameter_cutoff,            // in
+          ln_dia_cutoff, diameter_threshold, mass_2_vol, dgnum_amode,  // in
+          qnum_cur, qaer_cur_tmp, qaer_delsub_grow4rnam_tmp,           // out
+          qnumcw_cur, qaercw_cur_tmp, qaercw_delsub_grow4rnam_tmp);    // out
 
       // copy the output back to the variables
       for(int is = 0; is < nspecies; ++is) {
@@ -2644,20 +2633,18 @@ void mam_amicphys_1gridcell(
 }  // anonymous namespace
 
 KOKKOS_INLINE_FUNCTION
-void modal_aero_amicphys_intr(int ii, int kk, const AmicPhysConfig &config,
-                              const int nstep, const Real deltat,
-                              const Real temp, const Real pmid, const Real pdel,
-                              const Real zm, const Real pblh, const Real qv,
-                              const Real cld, Real q[gas_pcnst()],
-                              Real qqcw[gas_pcnst()],
-                              const Real q_pregaschem[gas_pcnst()],
-                              const Real q_precldchem[gas_pcnst()],
-                              const Real qqcw_precldchem[gas_pcnst()],
-                              Real q_tendbb[gas_pcnst()][nqtendbb()],
-                              Real qqcw_tendbb[gas_pcnst()][nqtendbb()],
-                              const Real dgncur_a[AeroConfig::num_modes()],
-                              const Real dgncur_awet[AeroConfig::num_modes()],
-                              const Real wetdens_host[AeroConfig::num_modes()]) {
+void modal_aero_amicphys_intr(
+    int ii, int kk, const AmicPhysConfig &config, const int nstep,
+    const Real deltat, const Real temp, const Real pmid, const Real pdel,
+    const Real zm, const Real pblh, const Real qv, const Real cld,
+    Real q[gas_pcnst()], Real qqcw[gas_pcnst()],
+    const Real q_pregaschem[gas_pcnst()], const Real q_precldchem[gas_pcnst()],
+    const Real qqcw_precldchem[gas_pcnst()],
+    Real q_tendbb[gas_pcnst()][nqtendbb()],
+    Real qqcw_tendbb[gas_pcnst()][nqtendbb()],
+    const Real dgncur_a[AeroConfig::num_modes()],
+    const Real dgncur_awet[AeroConfig::num_modes()],
+    const Real wetdens_host[AeroConfig::num_modes()]) {
   /*
       nstep                ! model time-step number
       nqtendbb             ! dimension for q_tendbb
