@@ -39,11 +39,14 @@ grids_manager:
 
 initial_conditions:
   # The name of the file containing the initial conditions for this test.
-  Filename: /qfs/people/sing201/eagles/refactor_mam/mam4xx_scream/3src/screami_unit_tests_mam4xx_ne2np4L72_LAT_m5.01469776300895_LON_28p1480318842490_MICROPHYSICS_2nd.nc
+  Filename: /qfs/people/sing201/eagles/refactor_mam/mam4xx_scream/3src/screami_unit_tests_mam4xx_ne2np4L72_LAT_5p38231612132146_LON_195p868748084951_MICROPHYSICS_3rd.nc
   topography_filename: ${TOPO_DATA_DIR}/${EAMxx_tests_TOPO_FILE}
   phis : 1.0
   pbl_height: 1.0
   #These should come from the input file
+  dgncur_a: [1.246662106183775E-007, 4.081134799487888E-008, 1.103139143795796E-006, 1.000000011686097E-007]
+  dgnumwet: [2.367209731605067E-007, 6.780643470563889E-008, 3.028011448344027E-006, 1.000000096285154E-007]
+  wetdens: [1038.67760516297, 1046.20002003441, 1031.74623165457, 1086.79731859184]
 
 # The parameters for I/O control
 Scorpio:

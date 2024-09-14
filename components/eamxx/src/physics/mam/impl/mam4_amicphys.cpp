@@ -1624,23 +1624,59 @@ void mam_amicphys_1subarea(
 
       copy_2d_array(nspecies, nmodes, qaer_cur,  // in
                     qaer_sv1);                   // out
-#if 0
 
-         call mam_gasaerexch_1subarea(                   
-           nstep,             lchnk,                     
-           ii,                kk,               jsubarea,
-           jtsubstep,         ntsubstep,                 
-           latndx,            lonndx,           lund,    
-           dtsubstep,                                    
-           temp,              pmid,             aircon,  
-           n_mode,                                       
-           qgas_cur,          qgas_avg,                  
-           qgas_netprod_otrproc,                         
-           qaer_cur,                                     
-           qnum_cur,                                     
-           qwtr_cur,                                     
-           dgn_a,             dgn_awet,         wetdens, 
-           uptkaer,           uptkrate_h2so4              )
+      // max_mode in MAM4 is different from nmodes(max_mode = nmodes+1)
+      // Here we create temporary arrays for now, but we should make
+      // it consistent to avoid this extra memoery
+      constexpr int max_mode = nmodes + 1;
+      Real qaer_cur_tmp[nspecies][max_mode];
+      Real qnum_cur_tmp[max_mode];
+      Real qwtr_cur_tmp[max_mode];
+
+      copy_2d_array(nspecies, nmodes, qaer_cur,  // in
+                    qaer_cur_tmp);               // out
+      copy_1d_array(nmodes, qwtr_cur,            // in
+                    qwtr_cur_tmp);               // out
+
+      copy_1d_array(nmodes, qnum_cur,  // in
+                    qnum_cur_tmp);     // out
+
+      Real uptkaer[max_gas()][max_mode];
+
+      mam4::mam_gasaerexch_1subarea(
+          jtsubstep, dtsubstep, temp, pmid, aircon, nmodes, qgas_cur, qgas_avg,
+          qgas_netprod_otrproc, qaer_cur_tmp, qnum_cur_tmp, qwtr_cur_tmp, dgn_a,
+          dgn_awet, wetdens, uptkaer, uptkrate_h2so4);
+
+      // copy back the values
+      copy_2d_array(nspecies, nmodes, qaer_cur_tmp,  // in
+                    qaer_cur);                       // out
+      copy_1d_array(nmodes, qwtr_cur_tmp,            // in
+                    qwtr_cur);                       // out
+
+      copy_1d_array(nmodes, qnum_cur_tmp,  // in
+                    qnum_cur);             // out
+
+#if 0
+    /*       void mam_gasaerexch_1subarea(
+    const int jtsubstep,                // in
+    const Real dtsubstep,               // in
+    const Real temp,                    // in
+    const Real pmid,                    // in
+    const Real aircon,                  // in
+    const int n_mode,                   // in
+    Real qgas_cur[gasaerexch::max_gas], // in/out
+    Real qgas_avg[gasaerexch::max_gas], // in/out
+    const Real qgas_netprod_otrproc[gasaerexch::max_gas],
+    Real qaer_cur[gasaerexch::max_aer][mam4::gasaerexch::max_mode],
+    Real qnum_cur[gasaerexch::max_mode], Real qwtr_cur[gasaerexch::max_mode],
+    Real dgn_a[gasaerexch::max_mode], Real dgn_awet[gasaerexch::max_mode],
+    Real wetdens[gasaerexch::max_mode],
+    Real uptkaer[gasaerexch::max_gas][mam4::gasaerexch::max_mode],
+    Real &uptkrate_h2so4)*/
+
+
+
            if(print_out .and. ii==icolprnt(lchnk) .and. kk==kprnt) write(106,*)'qgas_cur3:',qgas_cur(1),qgas_cur(2)
 
          qgas_delaa(:,iqtend_cond) = qgas_delaa(:,iqtend_cond) + (qgas_cur - (qgas_sv1 + qgas_netprod_otrproc*dtsubstep)) 
@@ -2621,8 +2657,7 @@ void modal_aero_amicphys_intr(int ii, int kk, const AmicPhysConfig &config,
                               Real qqcw_tendbb[gas_pcnst()][nqtendbb()],
                               const Real dgncur_a[AeroConfig::num_modes()],
                               const Real dgncur_awet[AeroConfig::num_modes()],
-                              const Real wetdens_host[AeroConfig::num_modes()],
-                              Real qaerwat[AeroConfig::num_modes()]) {
+                              const Real wetdens_host[AeroConfig::num_modes()]) {
   /*
       nstep                ! model time-step number
       nqtendbb             ! dimension for q_tendbb
@@ -2652,9 +2687,6 @@ void modal_aero_amicphys_intr(int ii, int kk, const AmicPhysConfig &config,
                                         ! dry & wet geo. mean dia. (m) of
     number distrib. wetdens_host(pcols,pver,ntot_amode) ! interstitial
     aerosol wet density (kg/m3)
-
-      qaerwat(pcols,pver,ntot_amode    aerosol water mixing ratio (kg/kg,
-    NOT mol/mol)
 
   */
 
@@ -2943,7 +2975,6 @@ void modal_aero_amicphys_intr(int ii, int kk, const AmicPhysConfig &config,
     if(iqqcwtend_rnam() < nqqcwtendbb())
       qqcw_tendbb[i][iqqcwtend_rnam()] = qqcwgcm_tendaa[i][iqqcwtend_rnam()];
   }
-  for(int i = 0; i < num_modes; ++i) qaerwat[i] = qaerwatgcm4[i];
 }
 
 }  // namespace scream::impl

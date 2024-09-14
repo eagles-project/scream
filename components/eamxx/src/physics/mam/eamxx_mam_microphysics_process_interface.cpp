@@ -142,9 +142,6 @@ void MAMMicrophysics::set_grids(
   // Wet aerosol density [kg/m3]
   add_field<Required>("wetdens", scalar3d_mid_nmodes, kg / m3, grid_name);
 
-  // Aerosol water [kg/kg]
-  add_field<Required>("qaerwat", scalar3d_mid_nmodes, kg / kg, grid_name);
-
   // Wet Required diameter [m]
   add_field<Required>("dgnumwet", scalar3d_mid_nmodes, m, grid_name);
 
@@ -729,7 +726,6 @@ void MAMMicrophysics::run_impl(const double dt) {
       get_field_in("dgnumwet").get_view<const Real ***>();
   const auto dry_geometric_mean_diameter_i =
       get_field_in("dgncur_a").get_view<const Real ***>();
-  const auto qaerwat = get_field_in("qaerwat").get_view<const Real ***>();
   const auto wetdens = get_field_in("wetdens").get_view<const Real ***>();
 
   // reset internal WSM variables
@@ -911,7 +907,6 @@ void MAMMicrophysics::run_impl(const double dt) {
             ekat::subview(wet_geometric_mean_diameter_i, icol);
         auto dry_diameter_icol =
             ekat::subview(dry_geometric_mean_diameter_i, icol);
-        auto qaerwat_icol = ekat::subview(qaerwat, icol);
         auto wetdens_icol = ekat::subview(wetdens, icol);
 
         // set surface state data
@@ -1146,12 +1141,10 @@ void MAMMicrophysics::run_impl(const double dt) {
               Real dgncur_a_kk[num_modes]    = {};
               Real dgncur_awet_kk[num_modes] = {};
               Real wetdens_kk[num_modes]     = {};
-              Real qaerwat_kk[num_modes]     = {};
 
               for(int imode = 0; imode < num_modes; imode++) {
                 dgncur_awet_kk[imode] = wet_diameter_icol(imode, k);
                 dgncur_a_kk[imode]    = dry_diameter_icol(imode, k);
-                qaerwat_kk[imode]     = qaerwat_icol(imode, k);
                 wetdens_kk[imode]     = wetdens_icol(imode, k);
               }
 
@@ -1176,8 +1169,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                   vmr, vmrcw,                               // out
                   vmr0, vmr_pregas, vmr_precld,             // in
                   vmr_tendbb, vmrcw_tendbb,                 // out
-                  dgncur_a_kk, dgncur_awet_kk, wetdens_kk,  // in
-                  qaerwat_kk);                              // out
+                  dgncur_a_kk, dgncur_awet_kk, wetdens_kk);  // in
 
               if(k == 48) {
                 for(int i = 10; i < 13; ++i) {
