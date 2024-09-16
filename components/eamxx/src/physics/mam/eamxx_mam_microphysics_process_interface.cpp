@@ -1050,10 +1050,11 @@ void MAMMicrophysics::run_impl(const double dt) {
               mam_coupling::mmr2vmr(qqcw, adv_mass_kg_per_moles,  // in
                                     vmrcw);                       // out
 
-              // for(int i = 0; i < gas_pcnst; ++i) {
-              // printf("BALLI:-loop-bb:, %.15e,%.15e,%.15e,%i\n", vmr[i], q[i],
-              //        adv_mass[i], i);
-              //}
+              if(k == 48) {
+                for(int i = 0; i < gas_pcnst; ++i) {
+                  printf("vmr-q-adv:, %0.15E,%.15e,%i\n", vmr[i], q[i], i + 1);
+                }
+              }
 
               //---------------------
               // Gas Phase Chemistry
@@ -1118,7 +1119,7 @@ void MAMMicrophysics::run_impl(const double dt) {
               constexpr int indexm  = mam4::gas_chemistry::indexm;
               if(k == 48) {
                 for(int i = 0; i < gas_pcnst; ++i) {
-                  printf("vmrcw, vmr BEF setsox:%0.15e,%0.15e,%i\n", vmrcw[i],
+                  printf("vmrcw, vmr BEF setsox:%0.15E,%0.15E,%i\n", vmrcw[i],
                          vmr[i], i + 1);
                 }
               }
@@ -1129,7 +1130,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                   vmrcw, vmr);                                           // out
               if(k == 48) {
                 for(int i = 0; i < gas_pcnst; ++i) {
-                  printf("vmrcw, vmr aft setsox:%0.15e,%0.15e,%i\n", vmrcw[i],
+                  printf("vmrcw, vmr aft setsox:%0.15E,%0.15E,%i\n", vmrcw[i],
                          vmr[i], i + 1);
                 }
               }
@@ -1154,11 +1155,11 @@ void MAMMicrophysics::run_impl(const double dt) {
               // do aerosol microphysics (gas-aerosol exchange, nucleation,
               // coagulation)
               if(k == 48) {
-                printf("others:%0.15e,%0.15e,%0.15e\n", pblh, qv, cldfrac);
+                printf("others:%0.15E,%0.15E,%0.15E\n", pblh, qv, cldfrac);
                 for(int im = 0; im < 4; im++) {
-                  printf("dgnum:%0.15e,%i\n", dgncur_a_kk[im], im);
-                  printf("dgnumwet:%0.15e\n", dgncur_awet_kk[im]);
-                  printf("wetdens:%0.15e\n", wetdens_kk[im]);
+                  printf("dgnum:%0.15E,%i\n", dgncur_a_kk[im], im);
+                  printf("dgnumwet:%0.15E\n", dgncur_awet_kk[im]);
+                  printf("wetdens:%0.15E\n", wetdens_kk[im]);
                 }
               }
 
@@ -1173,7 +1174,7 @@ void MAMMicrophysics::run_impl(const double dt) {
 
               if(k == 48) {
                 for(int i = 10; i < 13; ++i) {
-                  printf("vmrcw, vmr aft amicphys:%0.15e,%0.15e,%i\n", vmrcw[i],
+                  printf("vmrcw, vmr aft amicphys:%0.15E,%0.15E,%i\n", vmrcw[i],
                          vmr[i], i);
                 }
               }

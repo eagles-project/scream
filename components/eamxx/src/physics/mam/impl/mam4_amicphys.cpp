@@ -349,7 +349,7 @@ void compute_qsub_from_gcm_and_qsub_of_other_subarea(
           "zero\n");
       qsub_b[icnst][jcldy] = (qgcm[icnst] - f_a * qsub_a[icnst][jclea]) / f_b;
       if(kk == 48)
-        printf("HERE3:%0.15e,%0.15e,%0.15e,%0.15e,%0.15e,%i,%i,%i\n",
+        printf("HERE3:%0.15E,%0.15E,%0.15E,%0.15E,%0.15E,%i,%i,%i\n",
                qsub_b[icnst][jcldy], qgcm[icnst], f_a, f_b,
                qsub_a[icnst][jclea], icnst, jclea, jcldy);
 
@@ -723,7 +723,7 @@ void set_subarea_gases_and_aerosols(
       }
     }
     if(kk == 48)
-      printf("qsub1_1:%0.15e, %i, %i, %i\n", qsub1[2][1], jclea, jcldy,
+      printf("qsub1_1:%0.15E, %i, %i, %i\n", qsub1[2][1], jclea, jcldy,
              nsubarea);
   }
   //*************************************************************************************************
@@ -759,7 +759,7 @@ void set_subarea_gases_and_aerosols(
     }
     // qsub1 is fully populated for gasses
     if(kk == 48)
-      printf("qsub1_2:%0.15e,%0.15e, %i\n", qsub1[2][2], qsub1[2][2], nsubarea);
+      printf("qsub1_2:%0.15E,%0.15E, %i\n", qsub1[2][2], qsub1[2][2], nsubarea);
     //------------------------------------------------------------------------------------------
     // After gas chemistry, still assume gas mixing ratios are the same in all
     // subareas.
@@ -773,7 +773,7 @@ void set_subarea_gases_and_aerosols(
         }
       }
     }
-    // if(kk == 48) printf("qsub1_3:%0.15e\n", qsub2[2][2]);
+    // if(kk == 48) printf("qsub1_3:%0.15E\n", qsub2[2][2]);
     //  qsub2 is fully populated for gasses
     //----------------------------------------------------------------------------------------
     //   After cloud chemistry, gas and aerosol mass mixing ratios in the clear
@@ -800,7 +800,7 @@ void set_subarea_gases_and_aerosols(
                                                     qgcm3, jclea,
                                                     jcldy,          // in
                                                     qsub3, qsub3);  // inout
-    if(kk == 48) printf("qsub3_1:%0.15e, %0.15e\n", qsub3[2][1], qsub3[2][2]);
+    if(kk == 48) printf("qsub3_1:%0.15E, %0.15E\n", qsub3[2][1], qsub3[2][2]);
     // qsub3 is fully populated for gasses
     //=========================================================================
     // Set AEROSOL mixing ratios in subareas.
@@ -817,12 +817,12 @@ void set_subarea_gases_and_aerosols(
     set_subarea_qnumb_for_cldbrn_aerosols(jclea, jcldy, fcldy,
                                           qqcwgcm2,   // in
                                           qqcwsub2);  // inout
-    // if(kk==48)printf("qqcwsub2_2:%0.15e",qqcwsub2[0][0]);
+    // if(kk==48)printf("qqcwsub2_2:%0.15E",qqcwsub2[0][0]);
 
     set_subarea_qmass_for_cldbrn_aerosols(jclea, jcldy, fcldy,
                                           qqcwgcm2,   // in
                                           qqcwsub2);  // inout
-    // if(kk==48)printf("qqcwsub2_3:%0.15e",qqcwsub2[0][0]);
+    // if(kk==48)printf("qqcwsub2_3:%0.15E",qqcwsub2[0][0]);
     //  Partition mass and number before cloud chemistry
     // Following 2 calls set qqcwsub3(:,1)=0 and qqcwsub3(:,2) to a computed
     // value
@@ -1504,7 +1504,7 @@ void mam_amicphys_1subarea(
                 qgas_cur);         // out
 
   if(kk == 48)
-    printf("qgas_cur1:%0.15e,%0.15e,%0.15e\n", qgas_cur[0], qgas_cur[1],
+    printf("qgas_cur1:%0.15E,%0.15E,%0.15E\n", qgas_cur[0], qgas_cur[1],
            aircon);
   constexpr int nmodes   = AeroConfig::num_modes();
   constexpr int nspecies = AeroConfig::num_aerosol_ids();
@@ -1527,10 +1527,10 @@ void mam_amicphys_1subarea(
 
   if(kk == 48) {
     for(int imode = 0; imode < nmodes; ++imode) {
-      printf("qnum_cur:%0.15e,%0.15e,%0.15e, %i\n", qnum_cur[imode],
+      printf("qnum_cur:%0.15E,%0.15E,%0.15E, %i\n", qnum_cur[imode],
              qwtr_cur[imode], qnumcw_cur[imode], imode);
       for(int iaer = 0; iaer < nspecies; ++iaer) {
-        printf("qaer_cur:%0.15e,%0.15e, %i, %i\n", qaer_cur[iaer][imode],
+        printf("qaer_cur:%0.15E,%0.15E, %i, %i\n", qaer_cur[iaer][imode],
                qaercw_cur[iaer][imode], iaer, imode);
       }
     }
@@ -1541,6 +1541,8 @@ void mam_amicphys_1subarea(
   // cause by other processes (e.g., gas chemistry and cloud chemistry)
   //---------------------------------------------------------------------
   Real qgas_netprod_otrproc[max_gas()] = {0};
+  assign_1d_array(max_gas(), 0.0,         // in
+                  qgas_netprod_otrproc);  // out
 
   // If gaexch_h2so4_uptake_optaa == 2, then
   //  - if qgas increases from pre-gaschem to post-cldchem,
@@ -1548,8 +1550,8 @@ void mam_amicphys_1subarea(
   //    the integration
   //  - if it decreases,  start from post-cldchem mix-ratio
   // *** currently just do this for h2so4 (and nh3 if considered in model)
-  constexpr int igas_h2so4 = static_cast<int>(GasId::H2SO4);
-  constexpr int igas_nh3   = -999888777;  // Same as mam_refactor
+  constexpr int igas_h2so4 = 1;   // FIXME: This can change with modal model
+  constexpr int igas_nh3   = -1;  // FIXME: This can change with modal model
 
   if((do_cond_sub) && (gaexch_h2so4_uptake_optaa == 2)) {
     for(int igas = 0; igas < max_gas(); ++igas) {
@@ -1563,7 +1565,6 @@ void mam_amicphys_1subarea(
   constexpr int ntsubstep = 1;
   const Real del_h2so4_gasprod =
       haero::max(qgas3[igas_h2so4] - qgas1[igas_h2so4], 0) / ntsubstep;
-
   //-----------------------------------
   // Initialize increment diagnostics
   //-----------------------------------
@@ -1610,6 +1611,16 @@ void mam_amicphys_1subarea(
   constexpr int max_agepair = AeroConfig::max_agepair();
   Real qaer_delsub_coag_in[nspecies][max_agepair];  // [kmol/kmol]
   // FIXME: an aeert statement for ntsubstep
+
+  if(kk == 48) {
+    printf("igas_h2so4:%i,%0.15E, %i, %i\n", igas_h2so4, del_h2so4_gasprod,
+           max_agepair, do_cond_sub);
+    for(int igas = 0; igas < max_gas(); ++igas) {
+      printf("netprod:%i,%0.15E,%0.15E,%0.15E,%0.15E,%0.15E\n", igas,
+             qgas_netprod_otrproc[igas], qgas_cur[igas], qgas3[igas],
+             qgas1[igas], deltat);
+    }
+  }
   for(int jtsubstep = 0; jtsubstep < ntsubstep; ++jtsubstep) {
     //======================
     // Gas-aerosol exchange
@@ -1644,9 +1655,36 @@ void mam_amicphys_1subarea(
       Real uptkaer[max_gas()][max_mode];
 
       mam4::mam_gasaerexch_1subarea(
-          jtsubstep, dtsubstep, temp, pmid, aircon, nmodes, qgas_cur, qgas_avg,
-          qgas_netprod_otrproc, qaer_cur_tmp, qnum_cur_tmp, qwtr_cur_tmp, dgn_a,
-          dgn_awet, wetdens, uptkaer, uptkrate_h2so4);
+          kk,                                                // FIXME: remove kk
+          jtsubstep, dtsubstep, temp, pmid, aircon, nmodes,  // in
+          qgas_cur, qgas_avg,                                // inout
+          qgas_netprod_otrproc,                              // in
+          qaer_cur_tmp, qnum_cur_tmp, qwtr_cur_tmp,          // out
+          dgn_a, dgn_awet, wetdens,                          // in
+          uptkaer, uptkrate_h2so4);                          // out
+
+      if(kk == 48) {
+        for(int ig = 0; ig < max_gas(); ++ig) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_gasaerexch_1subarea_0:%0.15E,%0.15E,%i,%i\n",
+                   uptkaer[ig][im], uptkrate_h2so4, ig, im);
+          }
+        }
+        for(int ig = 0; ig < max_gas(); ++ig) {
+          printf("mam_gasaerexch_1subarea_1:%0.15E,%0.15E,%i\n", qgas_cur[ig],
+                 qgas_avg[ig], ig);
+        }
+        for(int im = 0; im < nmodes; ++im) {
+          printf("mam_gasaerexch_1subarea_2:%0.15E,%0.15E,%i\n",
+                 qnum_cur_tmp[im], qwtr_cur_tmp[im], im);
+        }
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_gasaerexch_1subarea_3:%0.15E,%i,%i\n",
+                   qaer_cur_tmp[is][im], is, im);
+          }
+        }
+      }
 
       // copy back the values
       copy_2d_array(nspecies, nmodes, qaer_cur_tmp,  // in
@@ -1880,8 +1918,7 @@ void mam_amicphys_1subarea(
                     qaer_sv1);                   // out
 
       mam4::coagulation::mam_coag_1subarea(
-          dtsubstep,                                 // in
-          temp, pmid, aircon,                        // in
+          dtsubstep, temp, pmid, aircon,             // in
           dgn_a, dgn_awet, wetdens,                  // in
           qnum_cur, qaer_cur, qaer_delsub_coag_in);  // inout, inout, out
 
@@ -2458,7 +2495,7 @@ void mam_amicphys_1gridcell(
           qgas3[igas] = qsub3[l][jsub] * fcvt_gas(igas);
           qgas4[igas] = qgas3[igas];
           if(kk == 48)
-            printf("qgas4:%0.15e,%0.15e,%0.15e,%0.15e,%i,%i, %i\n", qgas4[igas],
+            printf("qgas4:%0.15E,%0.15E,%0.15E,%0.15E,%i,%i, %i\n", qgas4[igas],
                    qgas3[igas], qsub3[l][jsub], fcvt_gas(igas), l, igas, jsub);
         }
       }
@@ -2594,7 +2631,7 @@ void mam_amicphys_1gridcell(
           const int l    = lmap_gas(igas);
           qsub4[l][jsub] = qgas4[igas] / fcvt_gas(igas);
           if(kk == 48)
-            printf("qsub4:%0.15e,%0.15e,%0.15e,%i,%i,%i\n", qsub4[l][jsub],
+            printf("qsub4:%0.15E,%0.15E,%0.15E,%i,%i,%i\n", qsub4[l][jsub],
                    qgas4[igas], fcvt_gas(igas), l, jsub, igas);
           for(int i = 0; i < nqtendaa(); ++i)
             qsub_tendaa[l][i][jsub] =
@@ -2848,9 +2885,9 @@ void modal_aero_amicphys_intr(
     dgn_awet[n] = dgncur_awet[n];
     wetdens[n]  = haero::max(1000.0, wetdens_host[n]);
     if(kk == 48) {
-      printf("dgn_a:%0.15e, %i\n", dgn_a[n], n);
-      printf("dgn_awet:%0.15e, %i\n", dgn_awet[n], n);
-      printf("wetdens:%0.15e, %i\n", wetdens[n], n);
+      printf("dgn_a:%0.15E, %i\n", dgn_a[n], n);
+      printf("dgn_awet:%0.15E, %i\n", dgn_awet[n], n);
+      printf("wetdens:%0.15E, %i\n", wetdens[n], n);
     }
   }
 
@@ -2868,9 +2905,9 @@ void modal_aero_amicphys_intr(
       qsub_tendaa, qqcwsub_tendaa);               // inout
   if(kk == 48) {
     for(int n = 0; n < num_modes; ++n) {
-      printf("AFT:dgn_a:%0.15e, %i\n", dgn_a[n], n);
-      printf("AFT:dgn_awet:%0.15e, %i\n", dgn_awet[n], n);
-      printf("AFT:wetdens:%0.15e, %i\n", wetdens[n], n);
+      printf("AFT:dgn_a:%0.15E, %i\n", dgn_a[n], n);
+      printf("AFT:dgn_awet:%0.15E, %i\n", dgn_awet[n], n);
+      printf("AFT:wetdens:%0.15E, %i\n", wetdens[n], n);
     }
     for(int jsub = 1; jsub < maxsubarea(); ++jsub) {
       for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
