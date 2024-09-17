@@ -42,6 +42,8 @@ class MAMMicrophysics final : public scream::AtmosphereProcess {
   using const_view_1d = typename KT::template view_1d<const Real>;
   using const_view_2d = typename KT::template view_2d<const Real>;
 
+  using view_1d_host = typename KT::view_1d<Real>::HostMirror;
+
   // unmanaged views (for buffer and workspace manager)
   using uview_1d = Unmanaged<typename KT::template view_1d<Real>>;
   using uview_2d = Unmanaged<typename KT::template view_2d<Real>>;
@@ -253,12 +255,10 @@ private_except_cuda:
   view_3d photo_rates_;
 
   // invariants members
+  mam_coupling::TracerTimeState trace_time_state_;
   std::shared_ptr<AtmosphereInput>  TracerDataReader_;
   std::shared_ptr<AbstractRemapper> TracerHorizInterp_;
-  mam_coupling::TracerData tracer_data_end_;
-  mam_coupling::TracerData tracer_data_beg_;
-  mam_coupling::TracerData tracer_data_out_;
-  view_2d p_src_invariant_;
+  mam_coupling::TracerData tracer_data_;
   view_3d invariants_;
   std::string oxid_file_name_;
   view_2d cnst_offline_[4];
@@ -266,25 +266,23 @@ private_except_cuda:
   // linoz reader
   std::shared_ptr<AtmosphereInput>  LinozDataReader_;
   std::shared_ptr<AbstractRemapper> LinozHorizInterp_;
-  mam_coupling::TracerData linoz_data_end_;
-  mam_coupling::TracerData linoz_data_beg_;
-  mam_coupling::TracerData linoz_data_out_;
-  view_2d p_src_linoz_;
+  mam_coupling::TracerData linoz_data_;
   std::string linoz_file_name_;
 
   // Vertical emission uses 9 files, here I am using std::vector to stote instance of each file.
+  mam_coupling::TracerTimeState vert_emiss_time_state_;
   std::vector<std::shared_ptr<AtmosphereInput>>  VertEmissionsDataReader_;
   std::vector<std::shared_ptr<AbstractRemapper>> VertEmissionsHorizInterp_;
-  std::vector<mam_coupling::TracerData> vert_emis_data_end_;
-  std::vector<mam_coupling::TracerData> vert_emis_data_beg_;
-  std::vector<mam_coupling::TracerData> vert_emis_data_out_;
-  std::vector<const_view_1d> vert_emis_altitude_int_;
+  std::vector<std::string> extfrc_lst_;
+  std::vector<mam_coupling::TracerData> vert_emis_data_;
   std::map< std::string, std::string >vert_emis_file_name_;
   std::map< std::string, std::vector<std::string> > vert_emis_var_names_;
   view_2d vert_emis_output_[mam_coupling::MAX_NUM_VERT_EMISSION_FIELDS];
   view_3d extfrc_;
   mam_coupling::ForcingHelper forcings_[mam4::gas_chemistry::extcnt];
 
+  view_1d_host acos_cosine_zenith_host_;
+  view_1d acos_cosine_zenith_;
 
 }; // MAMMicrophysics
 

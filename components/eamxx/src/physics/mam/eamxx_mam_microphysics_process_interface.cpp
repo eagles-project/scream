@@ -12,7 +12,6 @@
 
 // NOTE: see the impl/ directory for the contents of the impl namespace
 #include "impl/compute_o3_column_density.cpp"
-#include "impl/compute_water_content.cpp"
 #include "impl/gas_phase_chemistry.cpp"
 #include "physics/rrtmgp/shr_orb_mod_c2f.hpp"
 
@@ -130,6 +129,24 @@ void MAMMicrophysics::set_grids(
   // At interfaces
   FieldLayout scalar3d_layout_int{{COL, ILEV}, {ncol_, nlev_ + 1}};
 
+  const int nmodes    = mam4::AeroConfig::num_modes();  // Number of modes
+  // layout for 3D (ncol, nmodes, nlevs)
+  FieldLayout scalar3d_mid_nmodes =
+      grid_->get_3d_vector_layout(true, nmodes, "nmodes");
+
+  static constexpr auto m3 = m * m * m;
+     // Aerosol dry particle diameter [m]
+  add_field<Required>("dgncur_a", scalar3d_mid_nmodes, m, grid_name);
+
+  // Wet aerosol density [kg/m3]
+  add_field<Required>("wetdens", scalar3d_mid_nmodes, kg / m3, grid_name);
+
+  // Aerosol water [kg/kg]
+  add_field<Required>("qaerwat", scalar3d_mid_nmodes, kg / kg, grid_name);
+
+  // Wet Required diameter [m]
+  add_field<Required>("dgnumwet", scalar3d_mid_nmodes, m, grid_name);
+
   // define fields needed in mam4xx
 
   // atmospheric quantities
@@ -212,40 +229,61 @@ void MAMMicrophysics::set_grids(
   // Creating a Linoz reader and setting Linoz parameters involves reading data
   // from a file and configuring the necessary parameters for the Linoz model.
   {
-    // std::string
-    // linoz_file_name="linoz1850-2015_2010JPL_CMIP6_10deg_58km_c20171109.nc";
     linoz_file_name_ = m_params.get<std::string>("mam4_linoz_file_name");
     std::string spa_map_file = "";
     std::vector<std::string> var_names{"o3_clim",     "o3col_clim",   "t_clim",
                                        "PmL_clim",    "dPmL_dO3",     "dPmL_dT",
                                        "dPmL_dO3col", "cariolle_pscs"};
-    TracerFileType tracer_file_type;
+
+    // in format YYYYMMDD
+    int linoz_cyclical_ymd = m_params.get<int>("mam4_linoz_ymd");
+    scream::mam_coupling::setup_tracer_data(linoz_data_,
+                           linoz_file_name_, linoz_cyclical_ymd);
     LinozHorizInterp_ = scream::mam_coupling::create_horiz_remapper(
-        grid_, linoz_file_name_, spa_map_file, var_names, tracer_file_type);
+        grid_, linoz_file_name_, spa_map_file, var_names, linoz_data_);
     LinozDataReader_ = scream::mam_coupling::create_tracer_data_reader(
         LinozHorizInterp_, linoz_file_name_);
-    linoz_data_out_.set_file_type(tracer_file_type);
-    if(tracer_file_type == TracerFileType::FORMULA_PS) {
-      linoz_data_out_.set_hyam_n_hybm(LinozHorizInterp_, linoz_file_name_);
-    }
-    linoz_data_beg_.set_file_type(tracer_file_type);
-    linoz_data_end_.set_file_type(tracer_file_type);
+
+    // linoz reader
+    const auto io_grid_linoz = LinozHorizInterp_->get_src_grid();
+    const int num_cols_io_linoz =
+        io_grid_linoz->get_num_local_dofs();  // Number of columns on this rank
+    const int num_levs_io_linoz =
+        io_grid_linoz
+            ->get_num_vertical_levels();  // Number of levels per column
+    const int nvars = int(var_names.size());;
+    linoz_data_.init(num_cols_io_linoz, num_levs_io_linoz, nvars);
+    linoz_data_.allocate_temporal_views();
   }
+
   {
     oxid_file_name_          = m_params.get<std::string>("mam4_oxid_file_name");
     std::string spa_map_file = "";
-    std::vector<std::string> var_names{"O3", "HO2", "NO3", "OH"};
-    TracerFileType tracer_file_type;
+    //NOTE: order matches mam4xx:
+    std::vector<std::string> var_names{"O3", "OH", "NO3", "HO2"};
+
+    // //in format YYYYMMDD
+    int oxid_ymd = m_params.get<int>("mam4_oxid_ymd");
+    scream::mam_coupling::setup_tracer_data(tracer_data_,
+                           oxid_file_name_, oxid_ymd);
     TracerHorizInterp_ = scream::mam_coupling::create_horiz_remapper(
-        grid_, oxid_file_name_, spa_map_file, var_names, tracer_file_type);
+        grid_, oxid_file_name_, spa_map_file, var_names, tracer_data_);
     TracerDataReader_ = scream::mam_coupling::create_tracer_data_reader(
         TracerHorizInterp_, oxid_file_name_);
-    tracer_data_out_.set_file_type(tracer_file_type);
-    if(tracer_file_type == TracerFileType::FORMULA_PS) {
-      tracer_data_out_.set_hyam_n_hybm(TracerHorizInterp_, oxid_file_name_);
+
+    const int nvars    = int(var_names.size());;
+    const auto io_grid = TracerHorizInterp_->get_src_grid();
+    const int num_cols_io =
+        io_grid->get_num_local_dofs();  // Number of columns on this rank
+    const int num_levs_io =
+        io_grid->get_num_vertical_levels();  // Number of levels per column
+    tracer_data_.init(num_cols_io, num_levs_io, nvars);
+    tracer_data_.allocate_temporal_views();
+
+    for(int ivar = 0; ivar < nvars; ++ivar) {
+      cnst_offline_[ivar] = view_2d("cnst_offline_", ncol_, nlev_);
     }
-    tracer_data_beg_.set_file_type(tracer_file_type);
-    tracer_data_end_.set_file_type(tracer_file_type);
+
   }
 
   {
@@ -255,96 +293,78 @@ void MAMMicrophysics::set_grids(
     // extfrc_lst(:  9) = {'SO2             ','so4_a1          ','so4_a2          ','pom_a4          ','bc_a4           ',
                           // 'num_a1          ','num_a2          ','num_a4          ','SOAG            ' }
     // This order corresponds to files in namelist e3smv2
-    // Note that I change this order to match extfrc_lst
-    // 1,9,2,6,3,7,4,5,8
+    extfrc_lst_=std::vector<std::string>({"so2","so4_a1","so4_a2","pom_a4","bc_a4",
+                                         "num_a1","num_a2","num_a4","soag"});
 
-    std::string mam4_so2_verti_emiss_file_name =
-        //"cmip6_mam4_so2_elev_ne2np4_2010_clim_c20240726_OD.nc"
-    m_params.get<std::string>("mam4_so2_verti_emiss_file_name");
+    for (const auto& var_name : extfrc_lst_) {
+      std::string item_name= "mam4_"+var_name+"_verti_emiss_file_name";
+      const auto file_name = m_params.get<std::string>(item_name);
+      vert_emis_file_name_[var_name] = file_name;
+    }
     vert_emis_var_names_["so2"] = {"BB","ENE_ELEV", "IND_ELEV", "contvolc"};
-    vert_emis_file_name_["so2"] = mam4_so2_verti_emiss_file_name;
-
-    // so4_a1
-    // cmip6_mam4_so4_a1_elev_ne2np4_2010_clim_c20190821_OD.nc";
-    std::string  mam4_so4_a1_verti_emiss_file_name=
-    m_params.get<std::string>("mam4_so4_a1_verti_emiss_file_name");
     vert_emis_var_names_["so4_a1"] = {"BB","ENE_ELEV", "IND_ELEV", "contvolc"};
-    vert_emis_file_name_["so4_a1"] = mam4_so4_a1_verti_emiss_file_name;
-
-    // so4_a2
-    // "cmip6_mam4_so4_a2_elev_ne2np4_2010_clim_c20190821_OD.nc";
-    std::string  mam4_so4_a2_verti_emiss_file_name =
-    m_params.get<std::string>("mam4_so4_a2_verti_emiss_file_name");
     vert_emis_var_names_["so4_a2"] = { "contvolc"};
-    vert_emis_file_name_["so4_a2"] = mam4_so4_a2_verti_emiss_file_name;
-
-    // pom_a4
-    std::string  mam4_pom_a4_verti_emiss_file_name =
-    m_params.get<std::string>("mam4_pom_a4_verti_emiss_file_name");
-    //  base_path+"cmip6_mam4_pom_a4_elev_ne2np4_2010_clim_c20190821_OD.nc";
     vert_emis_var_names_["pom_a4"] = {"BB"};
-    vert_emis_file_name_["pom_a4"] = mam4_pom_a4_verti_emiss_file_name;
-
-    // cmip6_mam4_bc_a4_elev_ne2np4_2010_clim_c20240726_OD.nc
-    std::string mam4_bc_a4_verti_emiss_file_name =
-        m_params.get<std::string>("mam4_bc_a4_verti_emiss_file_name");
-    vert_emis_file_name_["bc_a4"] = mam4_bc_a4_verti_emiss_file_name;
     vert_emis_var_names_["bc_a4"] = {"BB"};
-
-    // num_a1
-    std::string  mam4_num_a1_verti_emiss_file_name =
-    m_params.get<std::string>("mam4_num_a1_verti_emiss_file_name");
-    // "cmip6_mam4_num_a1_elev_ne2np4_2010_clim_c20190821_OD.nc";
     vert_emis_var_names_["num_a1"] = {"num_a1_SO4_ELEV_BB","num_a1_SO4_ELEV_ENE", "num_a1_SO4_ELEV_IND", "num_a1_SO4_ELEV_contvolc"};
-    vert_emis_file_name_["num_a1"] = mam4_num_a1_verti_emiss_file_name;
-
-    // num_a2
-    std::string  mam4_num_a2_verti_emiss_file_name =
-    m_params.get<std::string>("mam4_num_a2_verti_emiss_file_name");
-    // "cmip6_mam4_num_a2_elev_ne2np4_2010_clim_c20190821_OD.nc";
     vert_emis_var_names_["num_a2"] = {"num_a2_SO4_ELEV_contvolc"};
-    vert_emis_file_name_["num_a2"] = mam4_num_a2_verti_emiss_file_name;
-
     // num_a4
     // FIXME: why the sectors in this files are num_a1;
     //  I guess this should be num_a4? Is this a bug in the orginal nc files?
-    // QUESTION...
-    std::string  mam4_num_a4_verti_emiss_file_name =
-    m_params.get<std::string>("mam4_num_a4_verti_emiss_file_name");
-    // "cmip6_mam4_num_a4_elev_ne2np4_2010_clim_c20190821_OD.nc";
     vert_emis_var_names_["num_a4"] = {"num_a1_BC_ELEV_BB", "num_a1_POM_ELEV_BB"};
-    vert_emis_file_name_["num_a4"] = mam4_num_a4_verti_emiss_file_name;
-
-    // SOAG
-    // m_params.get<std::string>("mam4_soag_verti_emiss_file_name");
-    std::string  mam4_soag_verti_emiss_file_name =
-    m_params.get<std::string>("mam4_soag_verti_emiss_file_name");
-    // base_path+"cmip6_mam4_soag_elev_ne2np4_2010_clim_c20190821_OD.nc";
     vert_emis_var_names_["soag"] = {"SOAbb_src","SOAbg_src", "SOAff_src"};
-    vert_emis_file_name_["soag"] = mam4_soag_verti_emiss_file_name;
 
 
-    for (const auto& item : vert_emis_file_name_) {
-      const auto var_name = item.first;
-      const auto file_name = item.second;
+    int verti_emiss_cyclical_ymd = m_params.get<int>("verti_emiss_ymd");
+
+    for (const auto& var_name : extfrc_lst_) {
+      const auto file_name = vert_emis_file_name_[var_name];
       const auto var_names = vert_emis_var_names_[var_name];
 
-      TracerFileType tracer_file_type;
+      scream::mam_coupling::TracerData data_tracer;
+      scream::mam_coupling::setup_tracer_data(data_tracer,
+                           file_name, verti_emiss_cyclical_ymd);
       auto hor_rem = scream::mam_coupling::create_horiz_remapper(
-          grid_, file_name, spa_map_file, var_names, tracer_file_type);
+          grid_, file_name, spa_map_file, var_names, data_tracer);
       auto file_reader =
           scream::mam_coupling::create_tracer_data_reader(hor_rem, file_name);
-      scream::mam_coupling::TracerData data_out, data_beg, data_end;
-      data_out.set_file_type(tracer_file_type);
-      data_beg.set_file_type(tracer_file_type);
-      data_end.set_file_type(tracer_file_type);
-
       VertEmissionsHorizInterp_.push_back(hor_rem);
       VertEmissionsDataReader_.push_back(file_reader);
-      vert_emis_data_out_.push_back(data_out);
-      vert_emis_data_beg_.push_back(data_beg);
-      vert_emis_data_end_.push_back(data_end);
-    }
+      vert_emis_data_.push_back(data_tracer);
+    }// var_name vert emissions
+    int i=0;
+    int offset_emis_ver=0;
+    for (auto it = extfrc_lst_.begin(); it != extfrc_lst_.end(); ++it, ++i) {
+      const auto var_name = *it;
+      const auto file_name = vert_emis_file_name_[var_name];
+      const auto var_names = vert_emis_var_names_[var_name];
+      const int nvars = int(var_names.size());
+
+      forcings_[i].nsectors = nvars;
+      // I am assuming the order of species in extfrc_lst_.
+      // Indexing in mam4xx is fortran.
+      forcings_[i].frc_ndx = i+1;
+      const auto io_grid_emis = VertEmissionsHorizInterp_[i]->get_src_grid();
+      const int num_cols_io_emis =
+          io_grid_emis->get_num_local_dofs();  // Number of columns on this rank
+      const int num_levs_io_emis =
+          io_grid_emis
+              ->get_num_vertical_levels();  // Number of levels per column
+      vert_emis_data_[i].init(num_cols_io_emis, num_levs_io_emis, nvars);
+      vert_emis_data_[i].allocate_temporal_views();
+      forcings_[i].file_alt_data=vert_emis_data_[i].has_altitude_;
+      for (int isp = 0; isp < nvars; ++isp)
+      {
+        EKAT_REQUIRE_MSG(
+        offset_emis_ver <= int(mam_coupling::MAX_NUM_VERT_EMISSION_FIELDS),
+        "Error! Number of fields is bigger than MAX_NUM_VERT_EMISSION_FIELDS. Increase the MAX_NUM_VERT_EMISSION_FIELDS in helper_micro.hpp \n");
+        forcings_[i].offset=offset_emis_ver;
+        vert_emis_output_[isp+offset_emis_ver] =
+          view_2d("vert_emis_output_", ncol_, nlev_);
+      }
+      offset_emis_ver+=nvars;
+    }  // end i
+
   }
 }
 
@@ -425,7 +445,7 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   dry_atm_.qi        = buffer_.qi_dry;
   dry_atm_.ni        = buffer_.ni_dry;
   dry_atm_.w_updraft = buffer_.w_updraft;
-  dry_atm_.z_surf    = 0.0;  // FIXME: for now
+  dry_atm_.z_surf    = 0.0;  // It is always zero.
 
   // get surface albedo: shortwave, direct
   d_sfc_alb_dir_vis_ = get_field_in("sfc_alb_dir_vis").get_view<const Real *>();
@@ -483,9 +503,6 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
       m_params.get<std::string>("mam4_xs_long_file");
 
   photo_table_ = impl::read_photo_table(rsf_file, xs_long_file);
-
-  // FIXME: read relevant land use data from drydep surface file
-
   // set up our preprocess/postprocess functors
   preprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_,
                          dry_aero_);
@@ -528,11 +545,6 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
     auto linoz_cariolle_pscs =
         buffer_.scratch[7];  // Cariolle parameter for PSC loss of ozone [1/s]
 
-    // Load the first month into spa_end.
-    // Note: At the first time step, the data will be moved into spa_beg,
-    //       and spa_end will be reloaded from file with the new month.
-    const int curr_month = timestamp().get_month() - 1;  // 0-based
-
     // const std::string linoz_chlorine_file =
     // "Linoz_Chlorine_Loading_CMIP6_0003-2017_c20171114.nc"; auto ts =
     // timestamp(); int chlorine_loading_ymd=20100101;
@@ -557,135 +569,32 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   //       and spa_end will be reloaded from file with the new month.
   const int curr_month = timestamp().get_month() - 1;  // 0-based
 
-  {
-    const int nvars    = 4;
-    const auto io_grid = TracerHorizInterp_->get_src_grid();
-    const int num_cols_io =
-        io_grid->get_num_local_dofs();  // Number of columns on this rank
-    const int num_levs_io =
-        io_grid->get_num_vertical_levels();  // Number of levels per column
+  scream::mam_coupling::update_tracer_data_from_file(
+        LinozDataReader_,
+        curr_month,
+        *LinozHorizInterp_,
+        linoz_data_);
 
-    tracer_data_end_.init(num_cols_io, num_levs_io, nvars);
+  scream::mam_coupling::update_tracer_data_from_file(
+        TracerDataReader_, curr_month, *TracerHorizInterp_,
+        tracer_data_);
+
+  int i=0;
+  for (auto it = extfrc_lst_.begin(); it != extfrc_lst_.end(); ++it, ++i) {
     scream::mam_coupling::update_tracer_data_from_file(
-        TracerDataReader_, timestamp(), curr_month, *TracerHorizInterp_,
-        tracer_data_end_);
-
-    tracer_data_beg_.init(num_cols_io, num_levs_io, nvars);
-    tracer_data_beg_.allocate_data_views();
-    tracer_data_beg_.allocate_ps();
-
-    tracer_data_out_.init(num_cols_io, num_levs_io, nvars);
-    tracer_data_out_.allocate_data_views();
-    tracer_data_out_.allocate_ps();
-
-    p_src_invariant_ =
-        view_2d("pressure_src_invariant", num_cols_io, num_levs_io);
-
-    for(int ivar = 0; ivar < nvars; ++ivar) {
-      cnst_offline_[ivar] = view_2d("cnst_offline_", ncol_, nlev_);
-    }
+          VertEmissionsDataReader_[i], curr_month,
+          *VertEmissionsHorizInterp_[i], vert_emis_data_[i]);
   }
 
-  // linoz reader
-  {
-    const auto io_grid_linoz = LinozHorizInterp_->get_src_grid();
-    const int num_cols_io_linoz =
-        io_grid_linoz->get_num_local_dofs();  // Number of columns on this rank
-    const int num_levs_io_linoz =
-        io_grid_linoz
-            ->get_num_vertical_levels();  // Number of levels per column
-    const int nvars = 8;
-    linoz_data_end_.init(num_cols_io_linoz, num_levs_io_linoz, nvars);
-    scream::mam_coupling::update_tracer_data_from_file(
-        LinozDataReader_, timestamp(), curr_month, *LinozHorizInterp_,
-        linoz_data_end_);
-
-    linoz_data_beg_.init(num_cols_io_linoz, num_levs_io_linoz, nvars);
-    linoz_data_beg_.allocate_data_views();
-    if(linoz_data_beg_.file_type == TracerFileType::FORMULA_PS) {
-      linoz_data_beg_.allocate_ps();
-    }
-
-    linoz_data_out_.init(num_cols_io_linoz, num_levs_io_linoz, nvars);
-    linoz_data_out_.allocate_data_views();
-    if(linoz_data_out_.file_type == TracerFileType::FORMULA_PS) {
-      linoz_data_out_.allocate_ps();
-    } else if(linoz_data_out_.file_type == TracerFileType::ZONAL) {
-      // we use ncremap and python scripts to convert zonal files to ne4pn4
-      // grids.
-      p_src_linoz_ =
-          view_2d("pressure_src_invariant", ncol_, num_levs_io_linoz);
-      scream::mam_coupling::compute_p_src_zonal_files(linoz_file_name_,
-                                                      p_src_linoz_);
-    }
-  }
-
-  // vertical emissions
-  {
-
-    int i=0;
-    int offset_emis_ver=0;
-    for (const auto& item : vert_emis_file_name_) {
-      const auto var_name = item.first;
-      const auto file_name = item.second;
-      const auto var_names = vert_emis_var_names_[var_name];
-      const int nvars = int(var_names.size());
-
-      forcings_[i].nsectors = nvars;
-      // I am assuming the order of species in the above code.
-      // Indexing in mam4xx is fortran.
-      forcings_[i].frc_ndx = i+1;
-      // We may need to move this line where we read files.
-      const auto io_grid_emis = VertEmissionsHorizInterp_[i]->get_src_grid();
-      const int num_cols_io_emis =
-          io_grid_emis->get_num_local_dofs();  // Number of columns on this rank
-      const int num_levs_io_emis =
-          io_grid_emis
-              ->get_num_vertical_levels();  // Number of levels per column
-      vert_emis_data_end_[i].init(num_cols_io_emis, num_levs_io_emis, nvars);
-      scream::mam_coupling::update_tracer_data_from_file(
-          VertEmissionsDataReader_[i], timestamp(), curr_month,
-          *VertEmissionsHorizInterp_[i], vert_emis_data_end_[i]);
-
-      vert_emis_data_beg_[i].init(num_cols_io_emis, num_levs_io_emis, nvars);
-      vert_emis_data_beg_[i].allocate_data_views();
-      if(vert_emis_data_beg_[i].file_type == TracerFileType::FORMULA_PS) {
-        vert_emis_data_beg_[i].allocate_ps();
-      }
-
-      vert_emis_data_out_[i].init(num_cols_io_emis, num_levs_io_emis, nvars);
-      vert_emis_data_out_[i].allocate_data_views();
-      if(vert_emis_data_out_[i].file_type == TracerFileType::FORMULA_PS) {
-        vert_emis_data_out_[i].allocate_ps();
-        forcings_[i].file_alt_data=false;
-      } else if(vert_emis_data_out_[i].file_type ==
-                TracerFileType::VERT_EMISSION) {
-        auto zi_src = scream::mam_coupling::get_altitude_int(
-            VertEmissionsHorizInterp_[i], file_name);
-        vert_emis_altitude_int_.push_back(zi_src);
-
-        forcings_[i].file_alt_data=true;
-      }
-
-      for (int isp = 0; isp < nvars; ++isp)
-      {
-        EKAT_REQUIRE_MSG(
-        offset_emis_ver <= int(mam_coupling::MAX_NUM_VERT_EMISSION_FIELDS),
-        "Error! Number of fields is bigger than MAX_NUM_VERT_EMISSION_FIELDS. Increase the MAX_NUM_VERT_EMISSION_FIELDS in helper_micro.hpp \n");
-        forcings_[i].offset=offset_emis_ver;
-        vert_emis_output_[isp+offset_emis_ver] =
-          view_2d("vert_emis_output_", ncol_, nlev_);
-      }
-      i++;
-      offset_emis_ver+=nvars;
-    }  // end i
+  invariants_ = view_3d("invarians", ncol_, nlev_, mam4::gas_chemistry::nfs);
 
   constexpr int extcnt =
       mam4::gas_chemistry::extcnt;
   extfrc_=view_3d("extfrc_", ncol_, nlev_, extcnt);
-  }
 
-  invariants_ = view_3d("invarians", ncol_, nlev_, mam4::gas_chemistry::nfs);
+  //
+  acos_cosine_zenith_host_ = view_1d_host("host_acos(cosine_zenith)", ncol_);
+  acos_cosine_zenith_ = view_1d("device_acos(cosine_zenith)", ncol_);
 }
 
 void MAMMicrophysics::run_impl(const double dt) {
@@ -698,12 +607,17 @@ void MAMMicrophysics::run_impl(const double dt) {
   Kokkos::parallel_for("preprocess", scan_policy, preprocess_);
   Kokkos::fence();
 
+  const auto wet_geometric_mean_diameter_i = get_field_in("dgnumwet").get_view<const Real ***>();
+  const auto dry_geometric_mean_diameter_i = get_field_in("dgncur_a").get_view<const  Real ***>();
+  const auto qaerwat = get_field_in("qaerwat").get_view<const Real ***>();
+  const auto wetdens = get_field_in("wetdens").get_view<const Real ***>();
+
   // reset internal WSM variables
   // workspace_mgr_.reset_internals();
 
   // NOTE: nothing depends on simulation time (yet), so we can just use zero for
   // now
-  double t = 0.0;
+  // double t = 0.0;
 
   // climatology data for linear stratospheric chemistry
   auto linoz_o3_clim = buffer_.scratch[0];  // ozone (climatology) [vmr]
@@ -743,23 +657,22 @@ void MAMMicrophysics::run_impl(const double dt) {
 
   // /* Update the TracerTimeState to reflect the current time, note the
   // addition of dt */
-  linoz_time_state_.t_now = ts.frac_of_year_in_days();
-  // FIXME: we do not need altitude_int for invariant tracers and linoz fields.
-  view_1d dummy_altitude_int;
+  trace_time_state_.t_now = ts.frac_of_year_in_days();
   scream::mam_coupling::advance_tracer_data(
-      TracerDataReader_, *TracerHorizInterp_, ts, linoz_time_state_,
-      tracer_data_beg_, tracer_data_end_, tracer_data_out_, p_src_invariant_,
-      dry_atm_.p_mid, dummy_altitude_int, dry_atm_.z_iface, cnst_offline_);
-
+      TracerDataReader_, *TracerHorizInterp_, ts, trace_time_state_,
+      tracer_data_,
+      dry_atm_.p_mid, dry_atm_.z_iface, cnst_offline_);
+  Kokkos::fence();
   scream::mam_coupling::advance_tracer_data(
       LinozDataReader_, *LinozHorizInterp_, ts, linoz_time_state_,
-      linoz_data_beg_, linoz_data_end_, linoz_data_out_, p_src_linoz_,
-      dry_atm_.p_mid, dummy_altitude_int, dry_atm_.z_iface, linoz_output);
-
+      linoz_data_,
+      dry_atm_.p_mid, dry_atm_.z_iface, linoz_output);
+  Kokkos::fence();
+  vert_emiss_time_state_.t_now = ts.frac_of_year_in_days();
   int i=0;
-  for (const auto& item : vert_emis_file_name_) {
-    const auto var_name = item.first;
-    const auto file_name = item.second;
+  for (auto it = extfrc_lst_.begin(); it != extfrc_lst_.end(); ++it, ++i) {
+    const auto var_name = *it;
+    const auto file_name = vert_emis_file_name_[var_name];
     const auto var_names = vert_emis_var_names_[var_name];
     const int nsectors = int(var_names.size());
     view_2d vert_emis_output[nsectors];
@@ -769,13 +682,14 @@ void MAMMicrophysics::run_impl(const double dt) {
     }
     scream::mam_coupling::advance_tracer_data(
         VertEmissionsDataReader_[i], *VertEmissionsHorizInterp_[i], ts,
-        linoz_time_state_, vert_emis_data_beg_[i], vert_emis_data_end_[i],
-        vert_emis_data_out_[i], p_src_linoz_, dry_atm_.p_mid,
-        vert_emis_altitude_int_[i], dry_atm_.z_iface, vert_emis_output);
-    i++;
+        vert_emiss_time_state_,
+        vert_emis_data_[i], dry_atm_.p_mid,
+        dry_atm_.z_iface, vert_emis_output);
+    Kokkos::fence();
   }
+
   const_view_1d &col_latitudes     = col_latitudes_;
-  const_view_1d &col_longitudes    = col_longitudes_;
+  // const_view_1d &col_longitudes    = col_longitudes_;
   const_view_1d &d_sfc_alb_dir_vis = d_sfc_alb_dir_vis_;
 
   mam_coupling::DryAtmosphere &dry_atm        = dry_atm_;
@@ -792,6 +706,8 @@ void MAMMicrophysics::run_impl(const double dt) {
 
   // Compute orbital parameters; these are used both for computing
   // the solar zenith angle.
+  // Note: We are following the RRTMGP EAMxx interface to compute the zenith angle.
+  // This operation is performed on the host because the routine shr_orb_cosz_c2f has not been ported to C++.
   auto ts2 = timestamp();
   double obliqr, lambm0, mvelpp;
   auto orbital_year = m_orbital_year;
@@ -815,19 +731,46 @@ void MAMMicrophysics::run_impl(const double dt) {
   auto calday = ts2.frac_of_year_in_days() +
                 1;  // Want day + fraction; calday 1 == Jan 1 0Z
   shr_orb_decl_c2f(calday, eccen, mvelpp, lambm0, obliqr, &delta, &eccf);
+  {
+    const auto col_latitudes_host  = grid_->get_geometry_data("lat").get_view<const Real *, Host>();
+    const auto col_longitudes_host = grid_->get_geometry_data("lon").get_view<const Real *, Host>();
+    // get a host copy of lat/lon
+    // Determine the cosine zenith angle
+    // NOTE: Since we are bridging to F90 arrays this must be done on HOST and then
+    //       deep copied to a device view.
+
+    // Now use solar declination to calculate zenith angle for all points
+    for (int i=0;i<ncol_;i++) {
+      Real lat = col_latitudes_host(i)*M_PI/180.0;  // Convert lat/lon to radians
+      Real lon = col_longitudes_host(i)*M_PI/180.0;
+      // what's the aerosol microphys frequency?
+      Real temp=shr_orb_cosz_c2f(calday, lat, lon, delta, dt);
+      acos_cosine_zenith_host_(i) = acos(temp);
+    }
+    Kokkos::deep_copy(acos_cosine_zenith_,acos_cosine_zenith_host_);
+  }
+  const auto zenith_angle = acos_cosine_zenith_;
+
   constexpr int num_modes = mam4::AeroConfig::num_modes();
   constexpr int gas_pcnst = mam_coupling::gas_pcnst();
   constexpr int nqtendbb  = mam_coupling::nqtendbb();
 
-  constexpr auto adv_mass = mam4::gas_chemistry::adv_mass;
   constexpr int pcnst = mam4::pcnst;
   const auto vert_emis_output = vert_emis_output_;
   const auto extfrc = extfrc_;
   const auto forcings = forcings_;
   constexpr int extcnt = mam4::gas_chemistry::extcnt;
 
-  // FIXME: remove this hard-code value
   const int offset_aerosol = mam4::utils::gasses_start_ind();
+  Real adv_mass_kg_per_moles[gas_pcnst];
+  // NOTE: Making copies of clsmap_4 and permute_4 to fix undefined arrays on the device.
+  int clsmap_4[gas_pcnst], permute_4[gas_pcnst];
+  for(int i = 0; i < gas_pcnst; ++i)
+  {
+    adv_mass_kg_per_moles[i] = mam4::gas_chemistry::adv_mass[i]/1e3;
+    clsmap_4[i]=mam4::gas_chemistry::clsmap_4[i];
+    permute_4[i]=mam4::gas_chemistry::permute_4[i];
+  }
 
   // loop over atmosphere columns and compute aerosol microphyscs
   Kokkos::parallel_for(
@@ -835,20 +778,24 @@ void MAMMicrophysics::run_impl(const double dt) {
         const int icol = team.league_rank();  // column index
 
         Real col_lat = col_latitudes(icol);   // column latitude (degrees?)
-        Real col_lon = col_longitudes(icol);  // column longitude
+        // Real col_lon = col_longitudes(icol);  // column longitude
 
         Real rlats =
             col_lat * M_PI / 180.0;  // convert column latitude to radians
-        Real rlons =
-            col_lon * M_PI / 180.0;  // convert column longitude to radians
+        // Real rlons =
+        //     col_lon * M_PI / 180.0;  // convert column longitude to radians
 
         // fetch column-specific atmosphere state data
         auto atm     = mam_coupling::atmosphere_for_column(dry_atm, icol);
         auto z_iface = ekat::subview(dry_atm.z_iface, icol);
         Real phis    = dry_atm.phis(icol);
 
-        // set surface state data
-        haero::Surface sfc{};
+        auto wet_diameter_icol =
+            ekat::subview(wet_geometric_mean_diameter_i, icol);
+        auto dry_diameter_icol =
+            ekat::subview(dry_geometric_mean_diameter_i, icol);
+        auto qaerwat_icol     = ekat::subview(qaerwat, icol);
+        auto wetdens_icol     = ekat::subview(wetdens, icol);
 
         // fetch column-specific subviews into aerosol prognostics
         mam4::Prognostics progs =
@@ -890,7 +837,7 @@ void MAMMicrophysics::run_impl(const double dt) {
         // calculate o3 column densities (first component of col_dens in Fortran
         // code)
         auto o3_col_dens_i = ekat::subview(o3_col_dens, icol);
-        impl::compute_o3_column_density(team, atm, progs, invariants_icol,
+        impl::compute_o3_column_density(team, atm, progs, invariants_icol, adv_mass_kg_per_moles,
                                         o3_col_dens_i);
 
         // set up photolysis work arrays for this column.
@@ -898,26 +845,15 @@ void MAMMicrophysics::run_impl(const double dt) {
         const auto& work_photo_table_icol = ekat::subview(work_photo_table,
         icol);
         //  set work view using 1D photo_work_arrays_icol
+        // Note: We are not allocating views here.
         mam4::mo_photo::set_photo_table_work_arrays(photo_table,
                                                     work_photo_table_icol,
                                                     photo_work_arrays_icol);
 
-        // ... look up photolysis rates from our table
-        // NOTE: the table interpolation operates on an entire column of data,
-        // so we NOTE: must do it before dispatching to individual vertical
-        // levels
-        Real zenith_angle =
-            shr_orb_cosz_c2f(calday, rlats, rlons, delta,
-                             dt);  // what's the aerosol microphys frequency?
-        zenith_angle = acos(zenith_angle);
-
-        Real surf_albedo = d_sfc_alb_dir_vis(icol);
-
         const auto &photo_rates_icol = ekat::subview(photo_rates, icol);
-
         mam4::mo_photo::table_photo(photo_rates_icol, atm.pressure,
         atm.hydrostatic_dp,
-         atm.temperature, o3_col_dens_i, zenith_angle, surf_albedo,
+         atm.temperature, o3_col_dens_i, zenith_angle(icol), d_sfc_alb_dir_vis(icol),
          atm.liquid_mixing_ratio, atm.cloud_fraction, eccf, photo_table,
          photo_work_arrays_icol);
 
@@ -948,12 +884,6 @@ void MAMMicrophysics::run_impl(const double dt) {
               Real state_q[pcnst]    = {};
               Real qqcw_long[pcnst] = {};
               mam4::utils::extract_stateq_from_prognostics(progs,atm, state_q, k);
-
-              // std::cout << "Before state_q: ";
-              // for (int i = 0; i < pcnst; ++i) {
-              //   std::cout << state_q[i] << " ";
-              // }
-
               mam4::utils::extract_qqcw_from_prognostics(progs,qqcw_long,k);
 
               for (int i = offset_aerosol; i < pcnst; ++i) {
@@ -966,8 +896,8 @@ void MAMMicrophysics::run_impl(const double dt) {
               // CHECK: convert_work_arrays_to_vmr and mmr2vmr should produce the same ouputs
               // However, in mmr2vmr we do not iterate to get species value.
               // mam_coupling::convert_work_arrays_to_vmr(q, qqcw, vmr, vmrcw);
-              mam_coupling::mmr2vmr(q,adv_mass, vmr);
-              mam_coupling::mmr2vmr(qqcw,adv_mass,vmrcw);
+              mam_coupling::mmr2vmr(q,adv_mass_kg_per_moles, vmr);
+              mam_coupling::mmr2vmr(qqcw,adv_mass_kg_per_moles,vmrcw);
 
               // aerosol/gas species tendencies (output)
               Real vmr_tendbb[gas_pcnst][nqtendbb]   = {};
@@ -987,25 +917,12 @@ void MAMMicrophysics::run_impl(const double dt) {
               // Gas Phase Chemistry
               //---------------------
               //
-              Real photo_rates_k[mam4::mo_photo::phtcnt];
-              for(int i = 0; i < mam4::mo_photo::phtcnt; ++i) {
-                photo_rates_k[i] = photo_rates_icol(k, i);
-              }
-
-              // Real extfrc_k[mam4::gas_chemistry::extcnt];
-              // for (int i = 0; i < mam4::gas_chemistry::extcnt; ++i) {
-              //   extfrc_k[i] = extfrc_icol(k, i);
-              // }
-                const auto& extfrc_k = ekat::subview(extfrc_icol,k);
-
-              Real invariants_k[mam4::gas_chemistry::nfs];
-              for(int i = 0; i < mam4::gas_chemistry::nfs; ++i) {
-                invariants_k[i] = invariants_icol(k, i);
-              }
-
+              const auto& extfrc_k = ekat::subview(extfrc_icol,k);
+              const auto& invariants_k = ekat::subview(invariants_icol,k);
+              const auto& photo_rates_k = ekat::subview(photo_rates_icol,k);
               impl::gas_phase_chemistry(zm, zi, phis, temp, pmid, pdel, dt,
-                                        photo_rates_k, extfrc_k.data(), invariants_k, vmr);
-
+                                        photo_rates_k.data(), extfrc_k.data(),
+                                        invariants_k.data(), clsmap_4, permute_4, vmr);
               //----------------------
               // Aerosol microphysics
               //----------------------
@@ -1026,21 +943,24 @@ void MAMMicrophysics::run_impl(const double dt) {
               // * dry and wet diameters [m]
               // * wet densities [kg/m3]
               // * aerosol water mass mixing ratio [kg/kg]
-              Real dgncur_a[num_modes]    = {};
-              Real dgncur_awet[num_modes] = {};
-              Real wetdens[num_modes]     = {};
-              Real qaerwat[num_modes]     = {};
+              Real dgncur_a_kk[num_modes]    = {};
+              Real dgncur_awet_kk[num_modes] = {};
+              Real wetdens_kk[num_modes]     = {};
+              Real qaerwat_kk[num_modes]     = {};
 
-              impl::compute_water_content(progs, atm, k, qv, temp, pmid, dgncur_a,
-                                          dgncur_awet, wetdens, qaerwat);
-
+              for (int imode = 0; imode < num_modes; imode++) {
+                dgncur_awet_kk[imode] = wet_diameter_icol(imode, k);
+                dgncur_a_kk[imode] = dry_diameter_icol(imode, k);
+                qaerwat_kk[imode] = qaerwat_icol(imode, k);
+                wetdens_kk[imode] = wetdens_icol(imode, k);
+              }
               // do aerosol microphysics (gas-aerosol exchange, nucleation,
               // coagulation)
               impl::modal_aero_amicphys_intr(
                   config.amicphys, step, dt, temp, pmid, pdel, zm, pblh, qv,
                   cldfrac, vmr, vmrcw, vmr_pregaschem, vmr_precldchem,
-                  vmrcw_precldchem, vmr_tendbb, vmrcw_tendbb, dgncur_a,
-                  dgncur_awet, wetdens, qaerwat);
+                  vmrcw_precldchem, vmr_tendbb, vmrcw_tendbb, dgncur_a_kk,
+                  dgncur_awet_kk, wetdens_kk, qaerwat_kk);
               //-----------------
               // LINOZ chemistry
               //-----------------
@@ -1053,7 +973,7 @@ void MAMMicrophysics::run_impl(const double dt) {
               int o3_ndx = 0;  // index of "O3" in solsym array (in EAM)
 
       mam4::lin_strat_chem::lin_strat_chem_solve_kk(o3_col_dens_i(k), temp,
-        zenith_angle, pmid, dt, rlats,
+        zenith_angle(icol), pmid, dt, rlats,
         linoz_o3_clim(icol, k), linoz_t_clim(icol, k), linoz_o3col_clim(icol, k),
         linoz_PmL_clim(icol, k), linoz_dPmL_dO3(icol, k), linoz_dPmL_dT(icol, k),
         linoz_dPmL_dO3col(icol, k), linoz_cariolle_pscs(icol, k),
@@ -1080,28 +1000,18 @@ void MAMMicrophysics::run_impl(const double dt) {
               // FIXME: C++ port in progress!
               // mam4::drydep::drydep_xactive(...);
 
-              mam_coupling::vmr2mmr(vmr,adv_mass, q);
-              mam_coupling::vmr2mmr(vmrcw,adv_mass,qqcw);
+              mam_coupling::vmr2mmr(vmr, adv_mass_kg_per_moles,  q);
+              mam_coupling::vmr2mmr(vmrcw, adv_mass_kg_per_moles, qqcw);
 
               for (int i = offset_aerosol; i < pcnst; ++i) {
                 state_q[i] = q[i-offset_aerosol];
                 qqcw_long[i] = qqcw[i-offset_aerosol];
               }
-              mam4::utils::inject_stateq_to_prognostics(state_q,progs,k);
-    //           std::cout << "state_q: ";
-    // for (int i = 0; i < pcnst; ++i) {
-    //     std::cout << state_q[i] << " ";
-    // }
-    // std::cout << std::endl;
-
-              mam4::utils::inject_qqcw_to_prognostics(qqcw_long, progs,k);
-              // transfer updated prognostics from work arrays
-              // mam_coupling::convert_work_arrays_to_mmr(vmr, vmrcw, q, qqcw);
-              // mam_coupling::transfer_work_arrays_to_prognostics(q, qqcw,
-              // progs, k);
+              mam4::utils::inject_stateq_to_prognostics(state_q, progs, k);
+              mam4::utils::inject_qqcw_to_prognostics(qqcw_long, progs, k);
             });
       });
-
+  Kokkos::fence();
   // postprocess output
   Kokkos::parallel_for("postprocess", policy, postprocess_);
   Kokkos::fence();
