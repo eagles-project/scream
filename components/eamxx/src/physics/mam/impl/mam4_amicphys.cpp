@@ -1298,6 +1298,21 @@ void copy_1d_array(const int arr_len, const Real (&arr_in)[arr_len],  // in
   }
 }
 
+// The dest_dim arg is the 2nd dimension of the arr_out array
+KOKKOS_INLINE_FUNCTION
+void copy_2d_partial_array(
+    const int first_dimlen,                             // in
+    const int second_dimlen,                            // in
+    const int dest_dim,                                 // in
+    const Real (&arr_in)[first_dimlen][second_dimlen],  // in
+    Real (&arr_out)[first_dimlen][dest_dim]) {          // out
+  for(int ifd = 0; ifd < first_dimlen; ++ifd) {
+    for(int isd = 0; isd < second_dimlen; ++isd) {
+      arr_out[ifd][isd] = arr_in[ifd][isd];
+    }
+  }
+}
+
 KOKKOS_INLINE_FUNCTION
 void copy_2d_array(const int first_dimlen,                             // in
                    const int second_dimlen,                            // in
@@ -1644,10 +1659,11 @@ void mam_amicphys_1subarea(
       Real qnum_cur_tmp[max_mode];
       Real qwtr_cur_tmp[max_mode];
 
-      copy_2d_array(nspecies, nmodes, qaer_cur,  // in
-                    qaer_cur_tmp);               // out
-      copy_1d_array(nmodes, qwtr_cur,            // in
-                    qwtr_cur_tmp);               // out
+      copy_2d_partial_array(nspecies, nmodes, max_mode, qaer_cur,  // in
+                            qaer_cur_tmp);                         // out
+
+      copy_1d_array(nmodes, qwtr_cur,  // in
+                    qwtr_cur_tmp);     // out
 
       copy_1d_array(nmodes, qnum_cur,  // in
                     qnum_cur_tmp);     // out
@@ -2911,12 +2927,12 @@ void modal_aero_amicphys_intr(
     }
     for(int jsub = 1; jsub < maxsubarea(); ++jsub) {
       for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
-        printf("amic4:%.15e,%.15e,%i, %i\n", qsub4[icnst][jsub],
-               qqcwsub4[icnst][jsub], icnst + 1, jsub);
+        // printf("amic4:%.15e,%.15e,%i, %i\n", qsub4[icnst][jsub],
+        //        qqcwsub4[icnst][jsub], icnst + 1, jsub);
       }
       for(int icnst = 0; icnst < AeroConfig::num_modes(); ++icnst) {
-        printf("amic4:%.15e,%.15e,%i, %i\n", qaerwatsub3[icnst][jsub],
-               qaerwatsub4[icnst][jsub], icnst + 1, jsub);
+        // printf("amic4:%.15e,%.15e,%i, %i\n", qaerwatsub3[icnst][jsub],
+        //        qaerwatsub4[icnst][jsub], icnst + 1, jsub);
       }
     }
   }
