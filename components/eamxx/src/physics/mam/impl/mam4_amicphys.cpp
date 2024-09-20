@@ -49,12 +49,12 @@ namespace {
 KOKKOS_INLINE_FUNCTION constexpr int nqtendaa() { return 4; }
 KOKKOS_INLINE_FUNCTION constexpr int nqqcwtendaa() { return 1; }
 KOKKOS_INLINE_FUNCTION constexpr int nqqcwtendbb() { return 1; }
-KOKKOS_INLINE_FUNCTION constexpr int iqtend_cond() { return 1; }
+KOKKOS_INLINE_FUNCTION constexpr int iqtend_cond() { return 0; }
 KOKKOS_INLINE_FUNCTION constexpr int iqtend_rnam() { return 1; }
 KOKKOS_INLINE_FUNCTION constexpr int iqtend_nnuc() { return 2; }
 KOKKOS_INLINE_FUNCTION constexpr int iqtend_coag() { return 3; }
 KOKKOS_INLINE_FUNCTION constexpr int iqtend_cond_only() { return 4; }
-KOKKOS_INLINE_FUNCTION constexpr int iqqcwtend_rnam() { return 1; }
+KOKKOS_INLINE_FUNCTION constexpr int iqqcwtend_rnam() { return 0; }
 KOKKOS_INLINE_FUNCTION constexpr int n_agepair() { return 1; }
 // FIXME: Add comments why maxareas is 3!!!
 KOKKOS_INLINE_FUNCTION constexpr int maxsubarea() { return 3; }
@@ -1704,12 +1704,10 @@ void mam_amicphys_1subarea(
                     qnum_cur);             // out
 
       for(int ig = 0; ig < max_gas(); ++ig) {
-        for(int iq = 0; iq < iqtend_cond(); ++iq) {
-          qgas_delaa[ig][iq] =
-              qgas_delaa[ig][iq] +
-              (qgas_cur[ig] -
-               (qgas_sv1[ig] + qgas_netprod_otrproc[ig] * dtsubstep));
-        }
+        qgas_delaa[ig][iqtend_cond()] =
+            qgas_delaa[ig][iqtend_cond()] +
+            (qgas_cur[ig] -
+             (qgas_sv1[ig] + qgas_netprod_otrproc[ig] * dtsubstep));
       }
       for(int im = 0; im < nmodes; ++im) {
         qnum_delsub_cond[im] = qnum_cur[im] - qnum_sv1[im];
@@ -1746,10 +1744,10 @@ void mam_amicphys_1subarea(
           }
         }
         for(int ig = 0; ig < max_gas(); ++ig) {
-          for(int iq = 0; iq < iqtend_cond(); ++iq) {
-            printf("mam_gasaerexch_1subarea_4:%0.15E,%i,%i\n",
-                   qgas_delaa[ig][iq], ig, iq);
-          }
+          // for(int iq = 0; iq < iqtend_cond(); ++iq) {
+          printf("mam_gasaerexch_1subarea_4:%0.15E,%i,%i\n",
+                 qgas_delaa[ig][iqtend_cond()], ig, iqtend_cond());
+          //}
         }
       }
 
@@ -1888,6 +1886,16 @@ void mam_amicphys_1subarea(
           qnumcw_cur, qaercw_cur_tmp,                                    // out
           qaercw_delsub_grow4rnam_tmp);                                  // in
 
+      // copy the output back to the variables
+      for(int is = 0; is < nspecies; ++is) {
+        for(int im = 0; im < nmodes; ++im) {
+          qaer_cur[is][im]                = qaer_cur_tmp[im][is];
+          qaer_delsub_grow4rnam[is][im]   = qaer_delsub_grow4rnam_tmp[im][is];
+          qaercw_cur[is][im]              = qaercw_cur_tmp[im][is];
+          qaercw_delsub_grow4rnam[is][im] = qaercw_delsub_grow4rnam_tmp[im][is];
+        }
+      }
+
       if(kk == 48) {
         for(int im = 0; im < nmodes; ++im) {
           printf("mam_rename_1subarea_1:%0.15E,%0.15E,%i\n", qnum_cur[im],
@@ -1901,53 +1909,59 @@ void mam_amicphys_1subarea(
         }
       }
 
-      // copy the output back to the variables
-      for(int is = 0; is < nspecies; ++is) {
-        for(int im = 0; im < nmodes; ++im) {
-          qaer_cur[is][im]                = qaer_cur_tmp[im][is];
-          qaer_delsub_grow4rnam[is][im]   = qaer_delsub_grow4rnam_tmp[im][is];
-          qaercw_cur[is][im]              = qaercw_cur_tmp[im][is];
-          qaercw_delsub_grow4rnam[is][im] = qaercw_delsub_grow4rnam_tmp[im][is];
-        }
-      }
-
       //------------------------
       // Accumulate increments
       //------------------------
       for(int im = 0; im < nmodes; ++im) {
-        for(int iq = 0; iq < iqtend_rnam(); ++iq) {
-          qnum_delaa[im][iq] =
-              qnum_delaa[im][iq] + (qnum_cur[im] - qnum_sv1[im]);
-        }
+        // for(int iq = 0; iq < iqtend_rnam(); ++iq) {
+        qnum_delaa[im][iqtend_rnam()] =
+            qnum_delaa[im][iqtend_rnam()] + (qnum_cur[im] - qnum_sv1[im]);
+        if(kk == 48)
+          printf("mam_rename_1subarea_3a:%0.15E,%0.15E,%0.15E,%i,%i\n",
+                 qnum_delaa[im][iqtend_rnam()], qnum_cur[im], qnum_sv1[im], im,
+                 iqtend_rnam());
+        //}
       }
 
       for(int is = 0; is < nspecies; ++is) {
         for(int im = 0; im < nmodes; ++im) {
-          for(int iq = 0; iq < iqtend_rnam(); ++iq) {
-            qaer_delaa[is][im][iq] =
-                qaer_delaa[is][im][iq] + (qaer_cur[is][im] - qaer_sv1[is][im]);
-          }
+          // for(int iq = 0; iq < iqtend_rnam(); ++iq) {
+          qaer_delaa[is][im][iqtend_rnam()] =
+              qaer_delaa[is][im][iqtend_rnam()] +
+              (qaer_cur[is][im] - qaer_sv1[is][im]);
+          if(kk == 48)
+            printf("mam_rename_1subarea_3b:%0.15E,%i,%i,%i\n",
+                   qaer_delaa[is][im][iqtend_rnam()], is, im, iqtend_rnam());
+          //}
         }
       }
 
       if(iscldy_subarea) {
         for(int im = 0; im < nmodes; ++im) {
-          for(int iq = 0; iq < iqqcwtend_rnam(); ++iq) {
-            qnumcw_delaa[im][iq] =
-                qnumcw_delaa[im][iq] + (qnumcw_cur[im] - qnumcw_sv1[im]);
-          }
+          // for(int iq = 0; iq < iqqcwtend_rnam(); ++iq) {
+          qnumcw_delaa[im][iqqcwtend_rnam()] =
+              qnumcw_delaa[im][iqqcwtend_rnam()] +
+              (qnumcw_cur[im] - qnumcw_sv1[im]);
+          if(kk == 48)
+            printf("mam_rename_1subarea_4a:%0.15E,%i,%i\n",
+                   qnumcw_delaa[im][iqqcwtend_rnam()], im, iqqcwtend_rnam());
+          //}
         }
         for(int is = 0; is < nspecies; ++is) {
           for(int im = 0; im < nmodes; ++im) {
-            for(int iq = 0; iq < iqqcwtend_rnam(); ++iq) {
-              qaercw_delaa[is][im][iq] =
-                  qaercw_delaa[is][im][iq] +
-                  (qaercw_cur[is][im] - qaercw_sv1[is][im]);
-            }
+            // for(int iq = 0; iq < iqqcwtend_rnam(); ++iq) {
+            qaercw_delaa[is][im][iqqcwtend_rnam()] =
+                qaercw_delaa[is][im][iqqcwtend_rnam()] +
+                (qaercw_cur[is][im] - qaercw_sv1[is][im]);
+            if(kk == 48)
+              printf("mam_rename_1subarea_4b:%0.15E,%i,%i,%i\n",
+                     qaercw_delaa[is][im][iqqcwtend_rnam()], is, im,
+                     iqqcwtend_rnam());
+            //}
           }
         }
-      }
-    }  // do_rename_sub
+      }  // if iscldy_subarea
+    }    // do_rename_sub
 
     //====================================
     // New particle formation (nucleation)
@@ -2055,16 +2069,17 @@ void mam_amicphys_1subarea(
 
     if(do_cond_sub) {
       for(int im = 0; im < nmodes; ++im) {
-        for(int iq = 0; iq < iqtend_cond(); ++iq) {
-          qnum_delaa[im][iq] = qnum_delaa[im][iq] + qnum_delsub_cond[im];
-        }
+        // for(int iq = 0; iq < iqtend_cond(); ++iq) {
+        qnum_delaa[im][iqtend_cond()] =
+            qnum_delaa[im][iqtend_cond()] + qnum_delsub_cond[im];
+        //}
       }
       for(int is = 0; is < nspecies; ++is) {
         for(int im = 0; im < nmodes; ++im) {
-          for(int iq = 0; iq < iqtend_cond(); ++iq) {
-            qaer_delaa[is][im][iq] =
-                qaer_delaa[is][im][iq] + qaer_delsub_cond[is][im];
-          }
+          // for(int iq = 0; iq < iqtend_cond(); ++iq) {
+          qaer_delaa[is][im][iqtend_cond()] =
+              qaer_delaa[is][im][iqtend_cond()] + qaer_delsub_cond[is][im];
+          //}
         }
       }
     }  // do_cond_sub
