@@ -1129,7 +1129,7 @@ void mam_amicphys_1subarea_clear(
           }
         Rename rename;
         rename.mam_rename_1subarea_(
-            iscldy_subarea, smallest_dryvol_value, dest_mode_of_mode,
+            1, iscldy_subarea, smallest_dryvol_value, dest_mode_of_mode,
             mean_std_dev, fmode_dist_tail_fac, v2n_lo_rlx, v2n_hi_rlx,
             ln_diameter_tail_fac, num_pairs, diameter_cutoff, ln_dia_cutoff,
             diameter_threshold, mass_2_vol, dgnum_amode, qnum_cur, qmol_i_cur,
@@ -1295,21 +1295,6 @@ void copy_1d_array(const int arr_len, const Real (&arr_in)[arr_len],  // in
                    Real (&arr_out)[arr_len]) {                        // out
   for(int ii = 0; ii < arr_len; ++ii) {
     arr_out[ii] = arr_in[ii];
-  }
-}
-
-// The dest_dim arg is the 2nd dimension of the arr_out array
-KOKKOS_INLINE_FUNCTION
-void copy_2d_partial_array(
-    const int first_dimlen,                             // in
-    const int second_dimlen,                            // in
-    const int dest_dim,                                 // in
-    const Real (&arr_in)[first_dimlen][second_dimlen],  // in
-    Real (&arr_out)[first_dimlen][dest_dim]) {          // out
-  for(int ifd = 0; ifd < first_dimlen; ++ifd) {
-    for(int isd = 0; isd < second_dimlen; ++isd) {
-      arr_out[ifd][isd] = arr_in[ifd][isd];
-    }
   }
 }
 
@@ -1659,8 +1644,11 @@ void mam_amicphys_1subarea(
       Real qnum_cur_tmp[max_mode];
       Real qwtr_cur_tmp[max_mode];
 
-      copy_2d_partial_array(nspecies, nmodes, max_mode, qaer_cur,  // in
-                            qaer_cur_tmp);                         // out
+      for(int is = 0; is < nspecies; ++is) {
+        for(int im = 0; im < nmodes; ++im) {
+          qaer_cur_tmp[is][im] = qaer_cur[is][im];
+        }
+      }
 
       copy_1d_array(nmodes, qwtr_cur,  // in
                     qwtr_cur_tmp);     // out
@@ -1675,41 +1663,46 @@ void mam_amicphys_1subarea(
           jtsubstep, dtsubstep, temp, pmid, aircon, nmodes,  // in
           qgas_cur, qgas_avg,                                // inout
           qgas_netprod_otrproc,                              // in
-          qaer_cur_tmp, qnum_cur_tmp, qwtr_cur_tmp,          // out
-          dgn_a, dgn_awet, wetdens,                          // in
-          uptkaer, uptkrate_h2so4);                          // out
+          qaer_cur_tmp, qnum_cur_tmp, qwtr_cur_tmp,          // inout
+          dgn_awet,                                          // in
+          uptkaer, uptkrate_h2so4);                          // inout
 
       if(kk == 48) {
         for(int ig = 0; ig < max_gas(); ++ig) {
           for(int im = 0; im < nmodes; ++im) {
-            printf("mam_gasaerexch_1subarea_0:%0.15E,%0.15E,%i,%i\n",
+            printf("mam_gasaerexch_1subarea_0t:%0.15E,%0.15E,%i,%i\n",
                    uptkaer[ig][im], uptkrate_h2so4, ig, im);
           }
         }
         for(int ig = 0; ig < max_gas(); ++ig) {
-          printf("mam_gasaerexch_1subarea_1:%0.15E,%0.15E,%i\n", qgas_cur[ig],
+          printf("mam_gasaerexch_1subarea_1t:%0.15E,%0.15E,%i\n", qgas_cur[ig],
                  qgas_avg[ig], ig);
         }
         for(int im = 0; im < nmodes; ++im) {
-          printf("mam_gasaerexch_1subarea_2:%0.15E,%0.15E,%i\n",
+          printf("mam_gasaerexch_1subarea_2t:%0.15E,%0.15E,%i\n",
                  qnum_cur_tmp[im], qwtr_cur_tmp[im], im);
         }
         for(int is = 0; is < nspecies; ++is) {
           for(int im = 0; im < nmodes; ++im) {
-            printf("mam_gasaerexch_1subarea_3:%0.15E,%i,%i\n",
+            printf("mam_gasaerexch_1subarea_3t:%0.15E,%i,%i\n",
                    qaer_cur_tmp[is][im], is, im);
           }
         }
       }
 
-      // copy back the values
-      copy_2d_array(nspecies, nmodes, qaer_cur_tmp,  // in
-                    qaer_cur);                       // out
-      copy_1d_array(nmodes, qwtr_cur_tmp,            // in
-                    qwtr_cur);                       // out
+      // copy back the values for aerosols
+      for(int is = 0; is < nspecies; ++is) {
+        for(int im = 0; im < nmodes; ++im) {
+          qaer_cur[is][im] = qaer_cur_tmp[is][im];
+        }
+      }
+
+      copy_1d_array(nmodes, qwtr_cur_tmp,  // in
+                    qwtr_cur);             // out
 
       copy_1d_array(nmodes, qnum_cur_tmp,  // in
                     qnum_cur);             // out
+
       for(int ig = 0; ig < max_gas(); ++ig) {
         for(int iq = 0; iq < iqtend_cond(); ++iq) {
           qgas_delaa[ig][iq] =
@@ -1731,6 +1724,35 @@ void mam_amicphys_1subarea(
           qgas_cur[igas_h2so4] -
           (qgas_sv1[igas_h2so4] + qgas_netprod_otrproc[igas_h2so4] * dtsubstep);
 
+      if(kk == 48) {
+        for(int ig = 0; ig < max_gas(); ++ig) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_gasaerexch_1subarea_0:%0.15E,%0.15E,%0.15E,%i,%i\n",
+                   uptkaer[ig][im], uptkrate_h2so4, del_h2so4_aeruptk, ig, im);
+          }
+        }
+        for(int ig = 0; ig < max_gas(); ++ig) {
+          printf("mam_gasaerexch_1subarea_1:%0.15E,%0.15E,%i\n", qgas_cur[ig],
+                 qgas_avg[ig], ig);
+        }
+        for(int im = 0; im < nmodes; ++im) {
+          printf("mam_gasaerexch_1subarea_2:%0.15E,%0.15E,%0.15E,%i\n",
+                 qnum_cur[im], qwtr_cur[im], qnum_delsub_cond[im], im);
+        }
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_gasaerexch_1subarea_3:%0.15E,%0.15E,%i,%i\n",
+                   qaer_cur[is][im], qaer_delsub_cond[is][im], is, im);
+          }
+        }
+        for(int ig = 0; ig < max_gas(); ++ig) {
+          for(int iq = 0; iq < iqtend_cond(); ++iq) {
+            printf("mam_gasaerexch_1subarea_4:%0.15E,%i,%i\n",
+                   qgas_delaa[ig][iq], ig, iq);
+          }
+        }
+      }
+
     } else {                              // do_cond_sub
       copy_1d_array(max_gas(), qgas_cur,  // in
                     qgas_avg);            // out
@@ -1741,6 +1763,22 @@ void mam_amicphys_1subarea(
       assign_1d_array(nmodes, 0.0,        // in
                       qnum_delsub_cond);  // out
       del_h2so4_aeruptk = 0;
+      if(kk == 48) {
+        for(int ig = 0; ig < max_gas(); ++ig) {
+          printf("mam_gasaerexch_1subarea_1else:%0.15E,%i\n", qgas_avg[ig], ig);
+        }
+
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_gasaerexch_1subarea_3else:%0.15E,%i,%i\n",
+                   qaer_delsub_cond[is][im], is, im);
+          }
+        }
+        for(int im = 0; im < nmodes; ++im) {
+          printf("mam_gasaerexch_1subarea_2else:%0.15E,%i\n",
+                 qnum_delsub_cond[im], im);
+        }
+      }
 
     }  // do_cond_sub
 
@@ -1766,6 +1804,15 @@ void mam_amicphys_1subarea(
                 qaer_delsub_grow4rnam[is][im];
             qaercw_delsub_grow4rnam[is][im] =
                 (qaercw3[is][im] - qaercw2[is][im]) / ntsubstep;
+          }
+        }
+        if(kk == 48) {
+          for(int is = 0; is < nspecies; ++is) {
+            for(int im = 0; im < nmodes; ++im) {
+              printf("rename_1:%0.15E,%0.15E,%i,%i\n",
+                     qaer_delsub_grow4rnam[is][im],
+                     qaercw_delsub_grow4rnam[is][im], is, im);
+            }
           }
         }
       }
@@ -1832,12 +1879,27 @@ void mam_amicphys_1subarea(
       }
       Rename rename;
       rename.mam_rename_1subarea_(
-          iscldy_subarea, smallest_dryvol_value, dest_mode_of_mode,    // in
-          mean_std_dev, fmode_dist_tail_fac, v2n_lo_rlx, v2n_hi_rlx,   // in
-          ln_diameter_tail_fac, num_pairs, diameter_cutoff,            // in
-          ln_dia_cutoff, diameter_threshold, mass_2_vol, dgnum_amode,  // in
-          qnum_cur, qaer_cur_tmp, qaer_delsub_grow4rnam_tmp,           // out
-          qnumcw_cur, qaercw_cur_tmp, qaercw_delsub_grow4rnam_tmp);    // out
+          kk, iscldy_subarea, smallest_dryvol_value, dest_mode_of_mode,  // in
+          mean_std_dev, fmode_dist_tail_fac, v2n_lo_rlx, v2n_hi_rlx,     // in
+          ln_diameter_tail_fac, num_pairs, diameter_cutoff,              // in
+          ln_dia_cutoff, diameter_threshold, mass_2_vol, dgnum_amode,    // in
+          qnum_cur, qaer_cur_tmp,                                        // out
+          qaer_delsub_grow4rnam_tmp,                                     // in
+          qnumcw_cur, qaercw_cur_tmp,                                    // out
+          qaercw_delsub_grow4rnam_tmp);                                  // in
+
+      if(kk == 48) {
+        for(int im = 0; im < nmodes; ++im) {
+          printf("mam_rename_1subarea_1:%0.15E,%0.15E,%i\n", qnum_cur[im],
+                 qnumcw_cur[im], im);
+        }
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_rename_1subarea_2:%0.15E,%0.15E,%i,%i\n",
+                   qaer_cur[is][im], qaercw_cur[is][im], is, im);
+          }
+        }
+      }
 
       // copy the output back to the variables
       for(int is = 0; is < nspecies; ++is) {
@@ -2311,7 +2373,7 @@ void mam_amicphys_1subarea_cloudy(
 
         Rename rename;
         rename.mam_rename_1subarea_(
-            iscldy_subarea, smallest_dryvol_value, dest_mode_of_mode,
+            1, iscldy_subarea, smallest_dryvol_value, dest_mode_of_mode,
             mean_std_dev, fmode_dist_tail_fac, v2n_lo_rlx, v2n_hi_rlx,
             ln_diameter_tail_fac, num_pairs, diameter_cutoff, ln_dia_cutoff,
             diameter_threshold, mass_2_vol, dgnum_amode, qnum_cur, qmol_i_cur,
