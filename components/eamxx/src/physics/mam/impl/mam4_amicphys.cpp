@@ -1286,6 +1286,242 @@ void mam_amicphys_1subarea_clear(
     }
   }
 }
+
+void mam_newnuc_1subarea(
+    const int jsub, const Real deltat, const Real temp,              // in
+    const Real pmid, const Real aircon, const Real zmid,             // in
+    const Real pblh, const Real relhum, const Real uptkrate_h2so4,   // in
+    const Real del_h2so4_gasprod, const Real del_h2so4_aeruptk,      // in
+    const Real qgas_cur[max_gas()], const Real qgas_avg[max_gas()],  // out
+    const Real qnum_cur[AeroConfig::num_modes()],                    // out
+    const Real qaer_cur[AeroConfig::num_aerosol_ids()]
+                       [AeroConfig::num_modes()],  // out
+    const Real qwtr_cur[AeroConfig::num_modes()],  // out
+    Real dnclusterdt) {                            // out
+
+  // FIXME: This function was not refactored or cleaned in fortran
+  //  we must clean it and remove unused codes and fix variable names
+
+  // nstep: model time-step number
+  // jsub: sub-area index
+  // deltat: model timestep (s)
+  // temp: temperature (K)
+  // pmid: pressure at model levels(Pa)
+  // aircon: air molar concentration (kmol/m3)
+  // zmid: midpoint height above surface (m)
+  // pblh  :pbl height (m)
+  // relhum:relative humidity (0-1)
+  // uptkrate_h2so4
+  // del_h2so4_gasprod
+  // del_h2so4_aeruptk
+  // dnclusterdt: cluster nucleation rate (#/m3/s)
+  // qgas_cur(max_gas)
+  // qgas_avg(max_gas)
+  // qnum_cur(max_mode)
+  // qaer_cur(1:max_aer,1:max_mode)
+  // qwtr_cur(1:max_mode)
+
+  // DESCRIPTION:
+  //   computes changes due to aerosol nucleation (new particle formation)
+  //       treats both nucleation and subsequent growth of new particles
+  //          to aitken mode size
+  //   uses the following parameterizations
+  //       vehkamaki et al. (2002) parameterization for binary
+  //           homogeneous nucleation (h2so4-h2o) plus
+  //       kerminen and kulmala (2002) parameterization for
+  //           new particle loss during growth to aitken size
+  //
+  // REVISION HISTORY:
+  //   R.Easter 2007.09.14:  Adapted from MIRAGE2 code and CMAQ V4.6 code
+  //
+
+  constexpr int newnuc_method_flagaa = 11;
+  //  1=merikanto et al (2007) ternary   2=vehkamaki et al (2002) binary
+  // 11=merikanto ternary + first-order boundary layer
+  // 12=merikanto ternary + second-order boundary layer
+
+  // begin
+  dnclusterdt = 0;
+
+  // qh2so4_cur = current qh2so4, after aeruptk
+  // qh2so4_avg = average qh2so4 over time-step
+  static constexpr int igas_h2so4 = static_cast<int>(GasId::H2SO4);
+  Real qh2so4_cur                 = qgas_cur[igas_h2so4];
+  /*
+            if ( (gaexch_h2so4_uptake_optaa == 1) && (newnuc_h2so4_conc_optaa ==
+     1) ) {
+      // estimate qh2so4_avg using the method in standard cam5.2
+     modal_aero_newnuc
+
+               // skip if h2so4 vapor < qh2so4_cutoff
+               if (qh2so4_cur <= qh2so4_cutoff) goto 80000
+
+               tmpa = max( 0.0_r8, del_h2so4_gasprod )
+               tmp_q3 = qh2so4_cur
+               // tmp_q2 = qh2so4 before aeruptk
+               // (note tmp_q3, tmp_q2 both >= 0.0)
+               tmp_q2 = tmp_q3 + max( 0.0_r8, -del_h2so4_aeruptk )
+
+               // tmpb = log( tmp_q2/tmp_q3 ) BUT with some checks added
+               if (tmp_q2 <= tmp_q3) then
+                  tmpb = 0.0_r8
+               else
+                  tmpc = tmp_q2 * exp( -20.0_r8 )
+                  if (tmp_q3 <= tmpc) then
+                     tmp_q3 = tmpc
+                     tmpb = 20.0_r8
+                  else
+                     tmpb = log( tmp_q2/tmp_q3 )
+                  end if
+               end if
+               // d[ln(qh2so4)]/dt (1/s) from uptake (condensation) to aerosol
+               tmp_uptkrate = tmpb/deltat
+
+      //   qh2so4_avg = estimated average qh2so4
+      //   when production & loss are done simultaneously
+               if (tmpb <= 0.1_r8) then
+                  qh2so4_avg = tmp_q3*(1.0_r8 + 0.5_r8*tmpb) - 0.5_r8*tmpa
+               else
+                  tmpc = tmpa/tmpb
+                  qh2so4_avg = (tmp_q3 - tmpc)*((exp(tmpb)-1.0_r8)/tmpb) + tmpc
+               end if
+            else
+      // use qh2so4_avg and first-order loss rate calculated in
+      mam_gasaerexch_1subarea qh2so4_avg = qgas_avg(igas_h2so4) tmp_uptkrate =
+      uptkrate_h2so4 end if
+
+            if (qh2so4_avg <= qh2so4_cutoff) goto 80000
+
+            if (igas_nh3 > 0) then
+                qnh3_cur = max( 0.0_r8, qgas_cur(igas_nh3) )
+            else
+                qnh3_cur = 0.0_r8
+            end if
+
+      //   dry-diameter limits for "grown" new particles
+            dplom_mode(1) = exp( 0.67_r8*log(dgnumlo_aer(nait))
+                               + 0.33_r8*log(dgnum_aer(nait)) )
+            dphim_mode(1) = dgnumhi_aer(nait)
+
+      //   mass1p_... = mass (kg) of so4 & nh4 in a single particle of diameter
+     ... //                (assuming same dry density for so4 & nh4) //
+     mass1p_aitlo - dp = dplom_mode(1) //      mass1p_aithi - dp = dphim_mode(1)
+            tmpa = dens_so4a_host*pi/6.0_r8
+            mass1p_aitlo = tmpa*(dplom_mode(1)**3)
+            mass1p_aithi = tmpa*(dphim_mode(1)**3)
+
+      //   limit RH to between 0.1% and 99%
+            relhumnn = max( 0.01_r8, min( 0.99_r8, relhum ) )
+
+
+      //   call ... routine to get nucleation rates
+            ldiagveh02 = -1
+
+            call mer07_veh02_nuc_mosaic_1box(
+                 newnuc_method_flagaa,
+                 deltat, temp, relhumnn, pmid,
+                 zmid, pblh,
+                 qh2so4_cur, qh2so4_avg, qnh3_cur, tmp_uptkrate,
+                 mw_so4a_host,
+                 1, 1, dplom_mode, dphim_mode,
+                 itmp, qnuma_del, qso4a_del, qnh4a_del,
+                 qh2so4_del, qnh3_del, dens_nh4so4a,
+                 ldiagveh02, dnclusterdt )
+
+
+      //   convert qnuma_del from (#/mol-air) to (#/kmol-air)
+            qnuma_del = qnuma_del*1.0e3_r8
+
+      //   number nuc rate (#/kmol-air/s) from number nuc amt
+            dndt_ait = qnuma_del/deltat
+
+      //   fraction of mass nuc going to so4
+            tmpa = qso4a_del*mw_so4a_host
+            if (igas_nh3 > 0) then
+               tmpb = tmpa + qnh4a_del*mw_nh4a_host
+               tmp_frso4 = max( tmpa, 1.0e-35_r8 )/max( tmpb, 1.0e-35_r8 )
+            else
+               tmpb = tmpa
+               tmp_frso4 = 1.0_r8
+            end if
+
+      //   mass nuc rate (kg/kmol-air/s) from mass nuc amts
+            dmdt_ait = max( 0.0_r8, (tmpb/deltat) )
+
+            dndt_aitsv1 = dndt_ait
+            dmdt_aitsv1 = dmdt_ait
+            dndt_aitsv2 = 0.0
+            dmdt_aitsv2 = 0.0
+            dndt_aitsv3 = 0.0
+            dmdt_aitsv3 = 0.0
+            tmpch1 = ' '
+            tmpch2 = ' '
+
+            if (dndt_ait < 1.0e2) then
+      //   ignore newnuc if number rate < 100 #/kmol-air/s ~= 0.3 #/mg-air/d
+               dndt_ait = 0.0
+               dmdt_ait = 0.0
+               tmpch1 = 'A'
+
+            else
+               dndt_aitsv2 = dndt_ait
+               dmdt_aitsv2 = dmdt_ait
+               tmpch1 = 'B'
+
+      //   mirage2 code checked for complete h2so4 depletion here,
+      //   but this is now done in mer07_veh02_nuc_mosaic_1box
+               mass1p = dmdt_ait/dndt_ait
+               dndt_aitsv3 = dndt_ait
+               dmdt_aitsv3 = dmdt_ait
+
+      //   apply particle size constraints
+               if (mass1p < mass1p_aitlo) then
+      //   reduce dndt to increase new particle size
+                  dndt_ait = dmdt_ait/mass1p_aitlo
+                  tmpch1 = 'C'
+               else if (mass1p > mass1p_aithi) then
+      //   reduce dmdt to decrease new particle size
+                  dmdt_ait = dndt_ait*mass1p_aithi
+                  tmpch1 = 'E'
+               end if
+            end if
+
+      // *** apply adjustment factor to avoid unrealistically high
+      //     aitken number concentrations in mid and upper troposphere
+            dndt_ait = dndt_ait * newnuc_adjust_factor_dnaitdt
+            dmdt_ait = dmdt_ait * newnuc_adjust_factor_dnaitdt
+
+            tmp_q_del = dndt_ait*deltat
+            qnum_cur(     nait) = qnum_cur(     nait) + tmp_q_del
+
+      //   dso4dt_ait, dnh4dt_ait are (kmol/kmol-air/s)
+            dso4dt_ait = dmdt_ait*tmp_frso4/mw_so4a_host
+            dnh4dt_ait = dmdt_ait*(1.0_r8 - tmp_frso4)/mw_nh4a_host
+
+            if (dso4dt_ait > 0.0_r8) then
+               tmp_q_del = dso4dt_ait*deltat
+               qaer_cur(     iaer_so4,nait) = qaer_cur(     iaer_so4,nait) +
+      tmp_q_del
+
+               tmp_q_del = min( tmp_q_del, qgas_cur(igas_h2so4) )
+               qgas_cur(     igas_h2so4) = qgas_cur(     igas_h2so4) - tmp_q_del
+            end if
+
+            if ((igas_nh3 > 0) .and. (dnh4dt_ait > 0.0_r8)) then
+               tmp_q_del = dnh4dt_ait*deltat
+               qaer_cur(     iaer_nh4,nait) = qaer_cur(     iaer_nh4,nait) +
+      tmp_q_del
+
+               tmp_q_del = min( tmp_q_del, qgas_cur(igas_nh3) )
+               qgas_cur(     igas_nh3) = qgas_cur(     igas_nh3) - tmp_q_del
+            end if
+
+      80000 continue
+
+      */
+  return;
+}  // end mam_newnuc_1subarea
+
 //--------------------------------------------------------------------------------
 // Utility functions
 //--------------------------------------------------------------------------------
@@ -1913,43 +2149,36 @@ void mam_amicphys_1subarea(
       // Accumulate increments
       //------------------------
       for(int im = 0; im < nmodes; ++im) {
-        // for(int iq = 0; iq < iqtend_rnam(); ++iq) {
         qnum_delaa[im][iqtend_rnam()] =
             qnum_delaa[im][iqtend_rnam()] + (qnum_cur[im] - qnum_sv1[im]);
         if(kk == 48)
           printf("mam_rename_1subarea_3a:%0.15E,%0.15E,%0.15E,%i,%i\n",
                  qnum_delaa[im][iqtend_rnam()], qnum_cur[im], qnum_sv1[im], im,
                  iqtend_rnam());
-        //}
       }
 
       for(int is = 0; is < nspecies; ++is) {
         for(int im = 0; im < nmodes; ++im) {
-          // for(int iq = 0; iq < iqtend_rnam(); ++iq) {
           qaer_delaa[is][im][iqtend_rnam()] =
               qaer_delaa[is][im][iqtend_rnam()] +
               (qaer_cur[is][im] - qaer_sv1[is][im]);
           if(kk == 48)
             printf("mam_rename_1subarea_3b:%0.15E,%i,%i,%i\n",
                    qaer_delaa[is][im][iqtend_rnam()], is, im, iqtend_rnam());
-          //}
         }
       }
 
       if(iscldy_subarea) {
         for(int im = 0; im < nmodes; ++im) {
-          // for(int iq = 0; iq < iqqcwtend_rnam(); ++iq) {
           qnumcw_delaa[im][iqqcwtend_rnam()] =
               qnumcw_delaa[im][iqqcwtend_rnam()] +
               (qnumcw_cur[im] - qnumcw_sv1[im]);
           if(kk == 48)
             printf("mam_rename_1subarea_4a:%0.15E,%i,%i\n",
                    qnumcw_delaa[im][iqqcwtend_rnam()], im, iqqcwtend_rnam());
-          //}
         }
         for(int is = 0; is < nspecies; ++is) {
           for(int im = 0; im < nmodes; ++im) {
-            // for(int iq = 0; iq < iqqcwtend_rnam(); ++iq) {
             qaercw_delaa[is][im][iqqcwtend_rnam()] =
                 qaercw_delaa[is][im][iqqcwtend_rnam()] +
                 (qaercw_cur[is][im] - qaercw_sv1[is][im]);
@@ -1957,7 +2186,6 @@ void mam_amicphys_1subarea(
               printf("mam_rename_1subarea_4b:%0.15E,%i,%i,%i\n",
                      qaercw_delaa[is][im][iqqcwtend_rnam()], is, im,
                      iqqcwtend_rnam());
-            //}
           }
         }
       }  // if iscldy_subarea
@@ -1974,22 +2202,13 @@ void mam_amicphys_1subarea(
 
       copy_2d_array(nspecies, nmodes, qaer_cur,  // in
                     qaer_sv1);                   // out
-#if 0
-         call mam_newnuc_1subarea(                                    
-            nstep,             lchnk,                                 
-            ii,                kk,               jsubarea,            
-            latndx,            lonndx,           lund,                
-            dtsubstep,                                                
-            temp,              pmid,             aircon,              
-            zmid,              pblh,             relhum,              
-            uptkrate_h2so4,   del_h2so4_gasprod, del_h2so4_aeruptk,   
-            n_mode,                                                   
-            qgas_cur,          qgas_avg,                              
-            qnum_cur,                                                 
-            qaer_cur,                                                 
-            qwtr_cur,                                                 
-            dnclusterdt_substep                                        )
 
+      Real dnclusterdt_substep;
+      mam_newnuc_1subarea(jsubarea, dtsubstep, temp, pmid, aircon, zmid, pblh,
+                          relhumsub, uptkrate_h2so4, del_h2so4_gasprod,
+                          del_h2so4_aeruptk, qgas_cur, qgas_avg, qnum_cur,
+                          qaer_cur, qwtr_cur, dnclusterdt_substep);
+#if 0
          qgas_delaa(:,iqtend_nnuc) = qgas_delaa(:,iqtend_nnuc) + (qgas_cur - qgas_sv1)
          qnum_delaa(:,iqtend_nnuc) = qnum_delaa(:,iqtend_nnuc) + (qnum_cur - qnum_sv1)
          qaer_delaa(:,:,iqtend_nnuc) = qaer_delaa(:,:,iqtend_nnuc) + (qaer_cur - qaer_sv1)
