@@ -1150,7 +1150,7 @@ void mam_amicphys_1subarea_clear(
         for(int j = 0; j < num_modes; ++j)
           qaer_del_rnam[i][j] += qaer_cur[i][j] - qaer_sv1[i][j];
     }
-
+#if 0
     // new particle formation (nucleation)
     if(config.do_newnuc) {
       for(int i = 0; i < num_gas_ids; ++i) qgas_sv1[i] = qgas_cur[i];
@@ -1168,12 +1168,13 @@ void mam_amicphys_1subarea_clear(
       Real dnh4dt_ait          = 0;
       Nucleation nucleation;
       Nucleation::Config config;
-      config.dens_so4a_host   = 1770;
+//      config.dens_so4a_host   = 1770;
       config.mw_nh4a_host     = 115;
       config.mw_so4a_host     = 115;
-      config.accom_coef_h2so4 = 0.65;
+//      config.accom_coef_h2so4 = 0.65;
       AeroConfig aero_config;
       nucleation.init(aero_config, config);
+
       nucleation.compute_tendencies_(
           dtsubstep, temp, pmid, aircon, zmid, pblh, relhum, uptkrate_h2so4,
           del_h2so4_gasprod, del_h2so4_aeruptk, qgas_cur, qgas_avg, qnum_cur,
@@ -1252,6 +1253,7 @@ void mam_amicphys_1subarea_clear(
         for(int i = 0; i < num_modes; ++i)
           qaer_del_cond[j][i] += qaer_delsub_cond[j][i];
     }
+#endif
   }
 
   // final mix ratios
@@ -1429,20 +1431,52 @@ void mam_newnuc_1subarea(
   //   limit RH to between 0.1% and 99%
   Real relhumnn = haero::max(0.01, haero::min(0.99, relhum));
 
-  //   call ... routine to get nucleation rates
-  constexpr int ldiagveh02 = -1;
-#if 0
-            call mer07_veh02_nuc_mosaic_1box(
-                 newnuc_method_flagaa,
-                 deltat, temp, relhumnn, pmid,
-                 zmid, pblh,
-                 qh2so4_cur, qh2so4_avg, qnh3_cur, tmp_uptkrate,
-                 mw_so4a_host,
-                 1, 1, dplom_mode, dphim_mode,
-                 itmp, qnuma_del, qso4a_del, qnh4a_del,
-                 qh2so4_del, qnh3_del, dens_nh4so4a,
-                 ldiagveh02, dnclusterdt )
+  // BAD CONSTANTS (These should come from chemistry mechanism
+  // but it is fixed here for stay BFB)
+  constexpr Real mw_so4a_host = 115.000000000000;
+  constexpr Real mwnh4        = 18;
+  constexpr Real mwso4        = 96;
+  // BAD CONSTANTS (These should come from Haero constants
+  // but it is fixed here for stay BFB)
+  constexpr Real rgas     = 8.31446759100000;
+  constexpr Real avogadro = 6.022140000000000E+023;
 
+  constexpr int ldiagveh02 = -1;
+  int itmp;
+  Real qnuma_del, qso4a_del, qnh4a_del, qh2so4_del, qnh3_del, dens_nh4so4a;
+
+  //   call ... routine to get nucleation rates
+  mam4::nucleation::mer07_veh02_nuc_mosaic_1box(
+      newnuc_method_flagaa, deltat, temp, relhumnn, pmid, zmid, pblh,
+      qh2so4_cur, qh2so4_avg, qnh3_cur, tmp_uptkrate, mw_so4a_host, 1,
+      dplom_mode, dphim_mode, rgas, avogadro, mwnh4, mwso4,
+      haero::Constants::pi, itmp, qnuma_del, qso4a_del, qnh4a_del, qh2so4_del,
+      qnh3_del, dens_nh4so4a, dnclusterdt);
+#if 0
+
+void mer07_veh02_nuc_mosaic_1box(
+    // in
+    const int newnuc_method_flagaa, const Real dtnuc, const Real temp_in,
+    const Real rh_in, const Real press_in, const Real zm_in, const Real pblh_in,
+    const Real qh2so4_cur, const Real qh2so4_avg, const Real qnh3_cur,
+    const Real h2so4_uptkrate, const Real mw_so4a_host, const int nsize,
+    // NOTE: in fortran dp_lo_sect is given/accessed as an array with extent
+    //       maxd_asize defined as "dimension for dp_lo_sect, ..."
+    //       however, as provided in validation data, it is a scalar
+    // const int maxd_asize,
+    const Real dp_lo_sect, const Real dp_hi_sect,
+    // in fortran provided by mo_constants
+    const Real rgas, const Real avogad,
+    // in fortran provided by physconst
+    const Real mw_nh4a, const Real mw_so4a,
+    // in fortran provided by mo_constants
+    const Real pi,
+    //  out
+    int &isize_nuc, Real &qnuma_del, Real &qso4a_del, Real &qnh4a_del,
+    Real &qh2so4_del, Real &qnh3_del, Real &dens_nh4so4a, Real &dnclusterdt) {
+
+
+      
 
   //   convert qnuma_del from (#/mol-air) to (#/kmol-air)
   qnuma_del = qnuma_del * 1.0e3;
