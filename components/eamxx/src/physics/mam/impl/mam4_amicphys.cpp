@@ -1290,19 +1290,19 @@ void mam_amicphys_1subarea_clear(
 }
 
 void mam_newnuc_1subarea(
-    const int newnuc_h2so4_conc_optaa,                               // in
-    const int gaexch_h2so4_uptake_optaa,                             // in
-    const int jsub, const Real deltat, const Real temp,              // in
-    const Real pmid, const Real aircon, const Real zmid,             // in
-    const Real pblh, const Real relhum, const Real uptkrate_h2so4,   // in
-    const Real del_h2so4_gasprod, const Real del_h2so4_aeruptk,      // in
-    const Real qgas_cur[max_gas()], const Real qgas_avg[max_gas()],  // out
-    const Real qnum_cur[AeroConfig::num_modes()],                    // out
-    const Real qaer_cur[AeroConfig::num_aerosol_ids()]
-                       [AeroConfig::num_modes()],  // out
+    const int kk, const int igas_h2so4,                   // FIXME: Remove kk
+    const int gaexch_h2so4_uptake_optaa,                  // in
+    const int newnuc_h2so4_conc_optaa,                    // in
+    const int jsub, const Real deltat, const Real temp,   // in
+    const Real pmid, const Real aircon, const Real zmid,  // in
+    const Real pblh, const Real relhum, const Real uptkrate_h2so4,  // in
+    const Real del_h2so4_gasprod, const Real del_h2so4_aeruptk,     // in
+    Real qgas_cur[max_gas()], const Real qgas_avg[max_gas()],       // out
+    Real qnum_cur[AeroConfig::num_modes()],                         // out
+    Real qaer_cur[AeroConfig::num_aerosol_ids()]
+                 [AeroConfig::num_modes()],        // out
     const Real qwtr_cur[AeroConfig::num_modes()],  // out
     Real dnclusterdt) {                            // out
-
   // FIXME: This function was not refactored or cleaned in fortran
   //  we must clean it and remove unused codes and fix variable names
 
@@ -1349,69 +1349,25 @@ void mam_newnuc_1subarea(
 
   // qh2so4_cur = current qh2so4, after aeruptk
   // qh2so4_avg = average qh2so4 over time-step
-  static constexpr int igas_h2so4 = static_cast<int>(GasId::H2SO4);
   // BAD CONSTANTS
   constexpr Real qh2so4_cutoff = 4.0e-16;
   Real qh2so4_cur              = qgas_cur[igas_h2so4];
   Real qh2so4_avg, tmp_uptkrate, tmpa;
 
-  if((gaexch_h2so4_uptake_optaa == 1) && (newnuc_h2so4_conc_optaa == 1)) {
-    // estimate qh2so4_avg using the method in standard cam5.2 modal_aero_newnuc
+  // use qh2so4_avg and first-order loss rate calculated in
+  // mam_gasaerexch_1subarea
+  qh2so4_avg   = qgas_avg[igas_h2so4];
+  tmp_uptkrate = uptkrate_h2so4;
 
-    // skip if h2so4 vapor < qh2so4_cutoff
-    if(qh2so4_cur <= qh2so4_cutoff) return;
-
-    tmpa        = haero::max(0, del_h2so4_gasprod);
-    Real tmp_q3 = qh2so4_cur;
-    // tmp_q2 = qh2so4 before aeruptk
-    // (note tmp_q3, tmp_q2 both >= 0.0)
-    Real tmp_q2 = tmp_q3 + haero::max(0, -del_h2so4_aeruptk);
-
-    // tmpb = log( tmp_q2/tmp_q3 ) BUT with some checks added
-    Real tmpb;
-    Real tmpc;
-    if(tmp_q2 <= tmp_q3) {
-      tmpb = 0;
-    } else {
-      // BAD CONSTANTS
-      tmpc = tmp_q2 * haero::exp(-20.0);
-      if(tmp_q3 <= tmpc) {
-        tmp_q3 = tmpc;
-        // BAD CONSTANTS
-        tmpb = 20;
-      } else {
-        // FIXME: kokkos assert for tmp_q3??
-        tmpb = haero::log(tmp_q2 / tmp_q3);
-      }
-    }
-    // d[ln(qh2so4)]/dt (1/s) from uptake (condensation) to aerosol
-    // FIXME: kokkos assert??
-    tmp_uptkrate = tmpb / deltat;
-
-    //   qh2so4_avg = estimated average qh2so4
-    //   when production & loss are done simultaneously
-    if(tmpb <= 0.1) {
-      qh2so4_avg = tmp_q3 * (1.0 + 0.5 * tmpb) - 0.5 * tmpa;
-    } else {
-      // FIXME: kokkos assert for tmpb??
-      tmpc       = tmpa / tmpb;
-      qh2so4_avg = (tmp_q3 - tmpc) * ((haero::exp(tmpb) - 1.0) / tmpb) + tmpc;
-    }
-  } else {
-    // use qh2so4_avg and first-order loss rate calculated in
-    // mam_gasaerexch_1subarea
-    qh2so4_avg   = qgas_avg[igas_h2so4];
-    tmp_uptkrate = uptkrate_h2so4;
+  if(kk == 48) {
+    printf("merv0:  %0.15E,  %i,  %i,  %i\n", qh2so4_avg, igas_h2so4,
+           newnuc_h2so4_conc_optaa, gaexch_h2so4_uptake_optaa);
   }
+
   if(qh2so4_avg <= qh2so4_cutoff) return;
 
   static constexpr int igas_nh3 = -999888777;  // Same as mam_refactor
   Real qnh3_cur                 = 0;
-  if(igas_nh3 > 0) {
-    qnh3_cur = haero::max(0, qgas_cur[igas_nh3]);
-  } else {
-    qnh3_cur = 0;
-  }
 
   //   dry-diameter limits for "grown" new particles
   constexpr int nait = static_cast<int>(ModeIndex::Aitken);
@@ -1433,7 +1389,7 @@ void mam_newnuc_1subarea(
 
   // BAD CONSTANTS (These should come from chemistry mechanism
   // but it is fixed here for stay BFB)
-  constexpr Real mw_so4a_host = 115.000000000000;
+  constexpr Real mw_so4a_host = 115;
   constexpr Real mwnh4        = 18;
   constexpr Real mwso4        = 96;
   // BAD CONSTANTS (These should come from Haero constants
@@ -1441,69 +1397,47 @@ void mam_newnuc_1subarea(
   constexpr Real rgas     = 8.31446759100000;
   constexpr Real avogadro = 6.022140000000000E+023;
 
-  constexpr int ldiagveh02 = -1;
   int itmp;
   Real qnuma_del, qso4a_del, qnh4a_del, qh2so4_del, qnh3_del, dens_nh4so4a;
 
   //   call ... routine to get nucleation rates
+  // FIXME: I GOT ALL ZEROS...THIS IS NOT VALIDATED YET!!!!
   mam4::nucleation::mer07_veh02_nuc_mosaic_1box(
-      newnuc_method_flagaa, deltat, temp, relhumnn, pmid, zmid, pblh,
-      qh2so4_cur, qh2so4_avg, qnh3_cur, tmp_uptkrate, mw_so4a_host, 1,
-      dplom_mode, dphim_mode, rgas, avogadro, mwnh4, mwso4,
-      haero::Constants::pi, itmp, qnuma_del, qso4a_del, qnh4a_del, qh2so4_del,
-      qnh3_del, dens_nh4so4a, dnclusterdt);
-#if 0
+      kk, newnuc_method_flagaa, deltat, temp, relhumnn, pmid, zmid, pblh,  // in
+      qh2so4_cur, qh2so4_avg, qnh3_cur, tmp_uptkrate, mw_so4a_host, 1,     // in
+      dplom_mode, dphim_mode, rgas, avogadro, mwnh4, mwso4,                // in
+      haero::Constants::pi,                                                // in
+      itmp, qnuma_del, qso4a_del, qnh4a_del, qh2so4_del,  // out
+      qnh3_del, dens_nh4so4a, dnclusterdt);               // out
 
-void mer07_veh02_nuc_mosaic_1box(
-    // in
-    const int newnuc_method_flagaa, const Real dtnuc, const Real temp_in,
-    const Real rh_in, const Real press_in, const Real zm_in, const Real pblh_in,
-    const Real qh2so4_cur, const Real qh2so4_avg, const Real qnh3_cur,
-    const Real h2so4_uptkrate, const Real mw_so4a_host, const int nsize,
-    // NOTE: in fortran dp_lo_sect is given/accessed as an array with extent
-    //       maxd_asize defined as "dimension for dp_lo_sect, ..."
-    //       however, as provided in validation data, it is a scalar
-    // const int maxd_asize,
-    const Real dp_lo_sect, const Real dp_hi_sect,
-    // in fortran provided by mo_constants
-    const Real rgas, const Real avogad,
-    // in fortran provided by physconst
-    const Real mw_nh4a, const Real mw_so4a,
-    // in fortran provided by mo_constants
-    const Real pi,
-    //  out
-    int &isize_nuc, Real &qnuma_del, Real &qso4a_del, Real &qnh4a_del,
-    Real &qh2so4_del, Real &qnh3_del, Real &dens_nh4so4a, Real &dnclusterdt) {
-
-
-      
+  if(kk == 48) {
+    printf(
+        "merv1:dels,dens,itmp:   %0.15E  %0.15E  %0.15E  %0.15E  %0.15E  "
+        "%0.15E  %0.15E  %i\n",
+        qnuma_del, qso4a_del, qnh4a_del, qh2so4_del, qnh3_del, dens_nh4so4a,
+        dnclusterdt, itmp);
+  }
 
   //   convert qnuma_del from (#/mol-air) to (#/kmol-air)
   qnuma_del = qnuma_del * 1.0e3;
 
   //   number nuc rate (#/kmol-air/s) from number nuc amt
-  dndt_ait = qnuma_del / deltat;
+  Real dndt_ait = qnuma_del / deltat;
 
   //   fraction of mass nuc going to so4
-  tmpa = qso4a_del * mw_so4a_host;
-  if(igas_nh3 > 0) {
-    tmpb      = tmpa + qnh4a_del * mw_nh4a_host;
-    tmp_frso4 = haer::max(tmpa, 1.0e-35) / haero::max(tmpb, 1.0e-35);
-  } else {
-    tmpb      = tmpa;
-    tmp_frso4 = 1.0;
-  }
+  tmpa           = qso4a_del * mw_so4a_host;
+  Real tmpb      = tmpa;
+  Real tmp_frso4 = 1.0;
 
   //   mass nuc rate (kg/kmol-air/s) from mass nuc amts
-  dmdt_ait = haero::max(0.0, (tmpb / deltat));
+  // FIXME: Assert statement for deltat
+  Real dmdt_ait = haero::max(0.0, (tmpb / deltat));
 
-  dndt_aitsv1 = dndt_ait;
-  dmdt_aitsv1 = dmdt_ait;
-  dndt_aitsv2 = 0.0;
-  dmdt_aitsv2 = 0.0;
-  dndt_aitsv3 = 0.0;
-  dmdt_aitsv3 = 0.0;
-
+  Real dndt_aitsv2 = 0.0;
+  Real dmdt_aitsv2 = 0.0;
+  Real dndt_aitsv3 = 0.0;
+  Real dmdt_aitsv3 = 0.0;
+  // BAD CONSTANTS
   if(dndt_ait < 1.0e2) {
     //   ignore newnuc if number rate < 100 #/kmol-air/s ~= 0.3 #/mg-air/d
     dndt_ait = 0.0;
@@ -1514,7 +1448,8 @@ void mer07_veh02_nuc_mosaic_1box(
 
     //   mirage2 code checked for complete h2so4 depletion here,
     //   but this is now done in mer07_veh02_nuc_mosaic_1box
-    mass1p      = dmdt_ait / dndt_ait;
+    // FIXME assert statement for dndt_ait
+    Real mass1p = dmdt_ait / dndt_ait;
     dndt_aitsv3 = dndt_ait;
     dmdt_aitsv3 = dmdt_ait;
 
@@ -1530,33 +1465,25 @@ void mer07_veh02_nuc_mosaic_1box(
 
   // *** apply adjustment factor to avoid unrealistically high
   //     aitken number concentrations in mid and upper troposphere
+  constexpr Real newnuc_adjust_factor_dnaitdt = 1;
   dndt_ait = dndt_ait * newnuc_adjust_factor_dnaitdt;
   dmdt_ait = dmdt_ait * newnuc_adjust_factor_dnaitdt;
 
-  tmp_q_del      = dndt_ait * deltat;
-  qnum_cur(nait) = qnum_cur(nait) + tmp_q_del;
+  Real tmp_q_del = dndt_ait * deltat;
+  qnum_cur[nait] = qnum_cur[nait] + tmp_q_del;
 
   //   dso4dt_ait, dnh4dt_ait are (kmol/kmol-air/s)
-  dso4dt_ait = dmdt_ait * tmp_frso4 / mw_so4a_host;
-  dnh4dt_ait = dmdt_ait * (1.0 - tmp_frso4) / mw_nh4a_host;
-
+  // FIXME: Assert statement for mw_so4a_host and mw_nh4a_host
+  constexpr Real mw_nh4a_host = mw_so4a_host;
+  Real dso4dt_ait             = dmdt_ait * tmp_frso4 / mw_so4a_host;
+  Real dnh4dt_ait             = dmdt_ait * (1.0 - tmp_frso4) / mw_nh4a_host;
+  constexpr int iaer_so4      = 1;
   if(dso4dt_ait > 0.0) {
     tmp_q_del                = dso4dt_ait * deltat;
-    qaer_cur(iaer_so4, nait) = qaer_cur(iaer_so4, nait) + tmp_q_del;
-    tmp_q_del                = haero::min(tmp_q_del, qgas_cur(igas_h2so4));
-    qgas_cur(igas_h2so4)     = qgas_cur(igas_h2so4) - tmp_q_del;
+    qaer_cur[iaer_so4][nait] = qaer_cur[iaer_so4][nait] + tmp_q_del;
+    tmp_q_del                = haero::min(tmp_q_del, qgas_cur[igas_h2so4]);
+    qgas_cur[igas_h2so4]     = qgas_cur[igas_h2so4] - tmp_q_del;
   }
-
-  if((igas_nh3 > 0) && (dnh4dt_ait > 0)) {
-    tmp_q_del                = dnh4dt_ait * deltat;
-    qaer_cur(iaer_nh4, nait) = qaer_cur(iaer_nh4, nait) + tmp_q_del;
-    tmp_q_del                = haero::min(tmp_q_del, qgas_cur(igas_nh3));
-    qgas_cur(igas_nh3)       = qgas_cur(igas_nh3) - tmp_q_del;
-  }
-#endif
-  // 80000 continue
-
-  return;
 }  // end mam_newnuc_1subarea
 
 //--------------------------------------------------------------------------------
@@ -2241,8 +2168,8 @@ void mam_amicphys_1subarea(
                     qaer_sv1);                   // out
 
       Real dnclusterdt_substep;
-      mam_newnuc_1subarea(gaexch_h2so4_uptake_optaa, newnuc_h2so4_conc_optaa,
-                          jsubarea, dtsubstep,                           // in
+      mam_newnuc_1subarea(kk, igas_h2so4, gaexch_h2so4_uptake_optaa,
+                          newnuc_h2so4_conc_optaa, jsubarea, dtsubstep,  // in
                           temp,                                          // in
                           pmid, aircon, zmid, pblh,                      // in
                           relhumsub, uptkrate_h2so4, del_h2so4_gasprod,  // in
