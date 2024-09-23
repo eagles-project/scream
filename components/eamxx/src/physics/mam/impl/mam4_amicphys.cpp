@@ -1300,9 +1300,8 @@ void mam_newnuc_1subarea(
     Real qgas_cur[max_gas()], const Real qgas_avg[max_gas()],       // out
     Real qnum_cur[AeroConfig::num_modes()],                         // out
     Real qaer_cur[AeroConfig::num_aerosol_ids()]
-                 [AeroConfig::num_modes()],        // out
-    const Real qwtr_cur[AeroConfig::num_modes()],  // out
-    Real dnclusterdt) {                            // out
+                 [AeroConfig::num_modes()],  // out
+    Real dnclusterdt) {                      // out
   // FIXME: This function was not refactored or cleaned in fortran
   //  we must clean it and remove unused codes and fix variable names
 
@@ -2175,15 +2174,57 @@ void mam_amicphys_1subarea(
                           relhumsub, uptkrate_h2so4, del_h2so4_gasprod,  // in
                           del_h2so4_aeruptk,                             // in
                           qgas_cur, qgas_avg, qnum_cur, qaer_cur,        // out
-                          qwtr_cur, dnclusterdt_substep);                // out
-#if 0
-         qgas_delaa(:,iqtend_nnuc) = qgas_delaa(:,iqtend_nnuc) + (qgas_cur - qgas_sv1)
-         qnum_delaa(:,iqtend_nnuc) = qnum_delaa(:,iqtend_nnuc) + (qnum_cur - qnum_sv1)
-         qaer_delaa(:,:,iqtend_nnuc) = qaer_delaa(:,:,iqtend_nnuc) + (qaer_cur - qaer_sv1)
+                          dnclusterdt_substep);                          // out
 
-         misc_vars_aa_sub%ncluster_tend_nnuc_1grid =
-         misc_vars_aa_sub%ncluster_tend_nnuc_1grid + dnclusterdt_substep*(dtsubstep/deltat)
-#endif
+      for(int ig = 0; ig < max_gas(); ++ig) {
+        qgas_delaa[ig][iqtend_nnuc()] += (qgas_cur[ig] - qgas_sv1[ig]);
+      }
+      for(int im = 0; im < nmodes; ++im) {
+        qnum_delaa[im][iqtend_nnuc()] += (qnum_cur[im] - qnum_sv1[im]);
+      }
+      for(int is = 0; is < nspecies; ++is) {
+        for(int im = 0; im < nmodes; ++im) {
+          qaer_delaa[is][im][iqtend_nnuc()] +=
+              (qaer_cur[is][im] - qaer_sv1[is][im]);
+        }
+      }
+
+      ncluster_tend_nnuc_1grid += dnclusterdt_substep * (dtsubstep / deltat);
+
+      if(kk == 48) {
+        printf("mam_newnuc_1subarea_0:%0.15E,%0.15E\n", dnclusterdt_substep,
+               ncluster_tend_nnuc_1grid);
+        for(int ig = 0; ig < max_gas(); ++ig) {
+          printf("mam_newnuc_1subarea_1:  %0.15E,  %0.15E,  %i\n", qgas_cur[ig],
+                 qgas_avg[ig], ig);
+        }
+        for(int im = 0; im < nmodes; ++im) {
+          printf("mam_newnuc_1subarea_2:  %0.15E,  %0.15E,  %i\n", qnum_cur[im],
+                 qwtr_cur[im], im);
+        }
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_newnuc_1subarea_3:  %0.15E,  %i,  %i\n",
+                   qaer_cur[is][im], is, im);
+          }
+        }
+        for(int ig = 0; ig < max_gas(); ++ig) {
+          printf("mam_newnuc_1subarea_4a:  %0.15E,  %i,  %i\n",
+                 qgas_delaa[ig][iqtend_nnuc()], ig, iqtend_nnuc());
+        }
+
+        for(int im = 0; im < 4; ++im) {
+          printf("mam_newnuc_1subarea_4b:  %0.15E,  %i\n",
+                 qnum_delaa[im][iqtend_nnuc()], im);
+        }
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_newnuc_1subarea_4c:  %0.15E,  %i,  %i\n",
+                   qaer_delaa[is][im][iqtend_nnuc()], is, im);
+          }
+        }
+      }
+
     }  // do_newnuc_sub
 
     //====================================
