@@ -2253,15 +2253,39 @@ void mam_amicphys_1subarea(
       }
 
       for(int im = 0; im < nmodes; ++im) {
-        for(int iq = 0; iq < iqtend_coag(); ++iq) {
-          qnum_delaa[im][iq] = qnum_delaa[im][iq] + qnum_delsub_coag[im];
-        }
+        qnum_delaa[im][iqtend_coag()] += qnum_delsub_coag[im];
       }
       for(int is = 0; is < nspecies; ++is) {
         for(int im = 0; im < nmodes; ++im) {
-          for(int iq = 0; iq < iqtend_coag(); ++iq) {
-            qaer_delaa[is][im][iq] =
-                qaer_delaa[is][im][iq] + qaer_delsub_coag[is][im];
+          qaer_delaa[is][im][iqtend_coag()] += qaer_delsub_coag[is][im];
+        }
+      }
+
+      if(kk == 48) {  // max_agepair
+        for(int im = 0; im < nmodes; ++im) {
+          printf("mam_coag_1subarea_2:  %0.15E,  %0.15E,  %i\n", qnum_cur[im],
+                 qnum_sv1[im], im);
+        }
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_coag_1subarea_3:  %0.15E,  %0.15E,  %i,  %i\n",
+                   qaer_cur[is][im], qaer_sv1[is][im], is, im);
+          }
+        }
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < max_agepair; ++im) {
+            printf("mam_coag_1subarea_4a: %0.15E, %i, %i\n",
+                   qaer_delsub_coag_in[is][im], is, im);
+          }
+        }
+        for(int im = 0; im < 4; ++im) {
+          printf("mam_coag_1subarea_4b:  %0.15E,  %i\n",
+                 qnum_delaa[im][iqtend_coag()], im);
+        }
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_coag_1subarea_4c:  %0.15E,  %i,  %i\n",
+                   qaer_delaa[is][im][iqtend_coag()], is, im);
           }
         }
       }
