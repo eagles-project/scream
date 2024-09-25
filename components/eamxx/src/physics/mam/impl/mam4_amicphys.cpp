@@ -1943,10 +1943,8 @@ void mam_amicphys_1subarea(
           }
         }
         for(int ig = 0; ig < max_gas(); ++ig) {
-          // for(int iq = 0; iq < iqtend_cond(); ++iq) {
           printf("mam_gasaerexch_1subarea_4:%0.15E,%i,%i\n",
                  qgas_delaa[ig][iqtend_cond()], ig, iqtend_cond());
-          //}
         }
       }
 
@@ -2308,7 +2306,7 @@ void mam_amicphys_1subarea(
         ((!iscldy_subarea) || (iscldy_subarea && do_cond_sub));
 
     if(do_aging_in_subarea) {
-      mam4::aging::mam_pcarbon_aging_1subarea(
+      mam4::aging::mam_pcarbon_aging_1subarea(kk,
           dgn_a,                                         // input
           qnum_cur, qnum_delsub_cond, qnum_delsub_coag,  // in-outs
           qaer_cur, qaer_delsub_cond, qaer_delsub_coag,  // in-outs
@@ -2321,22 +2319,48 @@ void mam_amicphys_1subarea(
 
     if(do_cond_sub) {
       for(int im = 0; im < nmodes; ++im) {
-        // for(int iq = 0; iq < iqtend_cond(); ++iq) {
         qnum_delaa[im][iqtend_cond()] =
             qnum_delaa[im][iqtend_cond()] + qnum_delsub_cond[im];
-        //}
       }
       for(int is = 0; is < nspecies; ++is) {
         for(int im = 0; im < nmodes; ++im) {
-          // for(int iq = 0; iq < iqtend_cond(); ++iq) {
           qaer_delaa[is][im][iqtend_cond()] =
               qaer_delaa[is][im][iqtend_cond()] + qaer_delsub_cond[is][im];
-          //}
         }
       }
+
+      if(kk == 48) {  // max_agepair
+        for(int im = 0; im < nmodes; ++im) {
+          printf("mam_pcarbon_aging_1subarea_2:  %0.15E,  %0.15E,  %0.15E,  %i\n", qnum_cur[im],
+                 qnum_delsub_cond[im],qnum_delsub_coag[im], im);
+        }
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_pcarbon_aging_1subarea_3:  %0.15E,  %0.15E,  %0.15E,  %i,  %i\n",
+                   qaer_cur[is][im], qaer_delsub_cond[is][im],qaer_delsub_coag[is][im], is, im);
+          }
+        }
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < max_agepair; ++im) {
+            printf("mam_pcarbon_aging_1subarea_4a: %0.15E, %i, %i\n",
+                   qaer_delsub_coag_in[is][im], is, im);
+          }
+        }
+        for(int im = 0; im < 4; ++im) {
+          printf("mam_pcarbon_aging_1subarea_4b:  %0.15E,  %i\n",
+                 qnum_delaa[im][iqtend_cond()], im);
+        }
+        for(int is = 0; is < nspecies; ++is) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("mam_pcarbon_aging_1subarea_4c:  %0.15E,  %i,  %i\n",
+                   qaer_delaa[is][im][iqtend_cond()], is, im);
+          }
+        }
+      }
+
+      
     }  // do_cond_sub
   }    // jtsubstep_loop
-       //***********************************
 
 }  // mam_amicphys_1subarea
 //--------------------------------------------------------------------------------
@@ -2668,7 +2692,7 @@ void mam_amicphys_1subarea_cloudy(
 
     // primary carbon aging
     if(config.do_cond) {
-      aging::mam_pcarbon_aging_1subarea(
+      aging::mam_pcarbon_aging_1subarea(1, 
           dgn_a, qnum_cur, qnum_delsub_cond, qnum_delsub_coag, qaer_cur,
           qaer_delsub_cond, qaer_delsub_coag, qaer_delsub_coag_in);
     }
