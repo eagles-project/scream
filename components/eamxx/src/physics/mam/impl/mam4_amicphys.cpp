@@ -106,6 +106,11 @@ KOKKOS_INLINE_FUNCTION int lmap_gas(const int mode) {
 KOKKOS_INLINE_FUNCTION int lmap_num(const int mode) {
   return numptr_amode_gas_pcnst(mode);
 }
+
+// Returns index of aerosol numbers in gas_pcnst array
+KOKKOS_INLINE_FUNCTION int lmap_numcw(const int mode) {
+  return numptr_amode_gas_pcnst(mode);
+}
 // aerosol mapping for aerosol microphysics
 // NOTE: it is different from "lmassptr_amode_gas_pcnst" as
 //       amicphys adds aerosol species in a special order that is different from
@@ -117,6 +122,10 @@ KOKKOS_INLINE_FUNCTION int lmap_aer(const int iaer, const int mode) {
           {11, 16, 20, -1}, {10, -1, 19, -1}, {12, 17, 25, 29},
       };
   return lmap_aer_[iaer][mode];
+}
+
+KOKKOS_INLINE_FUNCTION int lmap_aercw(const int iaer, const int mode) {
+  return lmap_aer(iaer, mode);
 }
 
 // conversion factor for aerosols
@@ -1573,11 +1582,15 @@ void mam_amicphys_1subarea(
           }
         }
         if(kk == 48) {
+          for(int im = 0; im < nmodes; ++im) {
+            printf("rename_0:  %0.15E, %i\n", qnumcw_cur[im], im);
+          }
           for(int is = 0; is < nspecies; ++is) {
             for(int im = 0; im < nmodes; ++im) {
-              printf("rename_1:%0.15E,%0.15E,%i,%i\n",
+              printf("rename_1:  %0.15E,  %0.15E,  %0.15E, %i, %i\n",
                      qaer_delsub_grow4rnam[is][im],
-                     qaercw_delsub_grow4rnam[is][im], is, im);
+                     qaercw_delsub_grow4rnam[is][im], qaercw_cur[is][im], is,
+                     im);
             }
           }
         }
@@ -1877,7 +1890,8 @@ void mam_amicphys_1subarea(
         ((!iscldy_subarea) || (iscldy_subarea && do_cond_sub));
 
     if(do_aging_in_subarea) {
-      mam4::aging::mam_pcarbon_aging_1subarea(kk,
+      mam4::aging::mam_pcarbon_aging_1subarea(
+          kk,
           dgn_a,                                         // input
           qnum_cur, qnum_delsub_cond, qnum_delsub_coag,  // in-outs
           qaer_cur, qaer_delsub_cond, qaer_delsub_coag,  // in-outs
@@ -1899,43 +1913,44 @@ void mam_amicphys_1subarea(
               qaer_delaa[is][im][iqtend_cond()] + qaer_delsub_cond[is][im];
         }
       }
+    }  // do_cond_sub
 
-      if(kk == 48) {  // max_agepair
+    if(kk == 48) {  // max_agepair
+      for(int im = 0; im < nmodes; ++im) {
+        printf("mam_pcarbon_aging_1subarea_2:  %0.15E,  %0.15E,  %0.15E,  %i\n",
+               qnum_cur[im], qnum_delsub_cond[im], qnum_delsub_coag[im], im);
+      }
+      for(int is = 0; is < nspecies; ++is) {
         for(int im = 0; im < nmodes; ++im) {
-          printf("mam_pcarbon_aging_1subarea_2:  %0.15E,  %0.15E,  %0.15E,  %i\n", qnum_cur[im],
-                 qnum_delsub_cond[im],qnum_delsub_coag[im], im);
-        }
-        for(int is = 0; is < nspecies; ++is) {
-          for(int im = 0; im < nmodes; ++im) {
-            printf("mam_pcarbon_aging_1subarea_3:  %0.15E,  %0.15E,  %0.15E,  %i,  %i\n",
-                   qaer_cur[is][im], qaer_delsub_cond[is][im],qaer_delsub_coag[is][im], is, im);
-          }
-        }
-        for(int is = 0; is < nspecies; ++is) {
-          for(int im = 0; im < max_agepair; ++im) {
-            printf("mam_pcarbon_aging_1subarea_4a: %0.15E, %i, %i\n",
-                   qaer_delsub_coag_in[is][im], is, im);
-          }
-        }
-        for(int im = 0; im < 4; ++im) {
-          printf("mam_pcarbon_aging_1subarea_4b:  %0.15E,  %i\n",
-                 qnum_delaa[im][iqtend_cond()], im);
-        }
-        for(int is = 0; is < nspecies; ++is) {
-          for(int im = 0; im < nmodes; ++im) {
-            printf("mam_pcarbon_aging_1subarea_4c:  %0.15E,  %i,  %i\n",
-                   qaer_delaa[is][im][iqtend_cond()], is, im);
-          }
+          printf(
+              "mam_pcarbon_aging_1subarea_3:  %0.15E,  %0.15E,  %0.15E,  %i, "
+              " %i\n",
+              qaer_cur[is][im], qaer_delsub_cond[is][im],
+              qaer_delsub_coag[is][im], is, im);
         }
       }
+      for(int is = 0; is < nspecies; ++is) {
+        for(int im = 0; im < max_agepair; ++im) {
+          printf("mam_pcarbon_aging_1subarea_4a: %0.15E, %i, %i\n",
+                 qaer_delsub_coag_in[is][im], is, im);
+        }
+      }
+      for(int im = 0; im < 4; ++im) {
+        printf("mam_pcarbon_aging_1subarea_4b:  %0.15E,  %i\n",
+               qnum_delaa[im][iqtend_cond()], im);
+      }
+      for(int is = 0; is < nspecies; ++is) {
+        for(int im = 0; im < nmodes; ++im) {
+          printf("mam_pcarbon_aging_1subarea_4c:  %0.15E,  %i,  %i\n",
+                 qaer_delaa[is][im][iqtend_cond()], is, im);
+        }
+      }
+    }
 
-      
-    }  // do_cond_sub
-  }    // jtsubstep_loop
+  }  // jtsubstep_loop
 
 }  // mam_amicphys_1subarea
 //--------------------------------------------------------------------------------
-
 
 KOKKOS_INLINE_FUNCTION
 void mam_amicphys_1gridcell(
@@ -2122,9 +2137,20 @@ void mam_amicphys_1gridcell(
 
     // FIXME: Remove code above till FIXME
     if(iscldy_subarea[jsub]) {
+      // BALLI : FIXME: IT IS IMPORTANT TO INIT THE FOLOWING TO ZERO!!!
+      for(int imode = 0; imode < num_modes; ++imode) {
+        qnumcw2[imode] = 0;
+        qnumcw3[imode] = 0;
+        qnumcw4[imode] = 0;
+        for(int iaer = 0; iaer < num_aerosol_ids; ++iaer) {
+          qaercw2[iaer][imode] = 0;
+          qaercw3[iaer][imode] = 0;
+          qaercw4[iaer][imode] = 0;
+        }  // iaer
+      }    // imode
       // only do cloud-borne for cloudy
       for(int imode = 0; imode < num_modes; ++imode) {
-        int ln         = lmap_num(imode);
+        int ln         = lmap_numcw(imode);
         qnumcw2[imode] = qqcwsub2[ln][jsub] * fcvt_num();
         qnumcw3[imode] = qqcwsub3[ln][jsub] * fcvt_num();
         qnumcw4[imode] = qnumcw3[imode];
@@ -2162,6 +2188,7 @@ void mam_amicphys_1gridcell(
     Real qaer_delaa[num_aerosol_ids][num_modes][nqtendaa()]      = {};
     Real qaercw_delaa[num_aerosol_ids][num_modes][nqqcwtendaa()] = {};
 
+    // FIXME: write in-outs!!
     mam_amicphys_1subarea(
         config.gaexch_h2so4_uptake_optaa, config.newnuc_h2so4_conc_optaa,
         do_cond, do_rename, do_newnuc, do_coag, ii, kk, deltat, jsub, nsubarea,
@@ -2171,62 +2198,99 @@ void mam_amicphys_1gridcell(
         qwtr3, qwtr4, qnumcw3, qnumcw4, qnumcw_delaa, qaercw2, qaercw3, qaercw4,
         qaercw_delaa);
 
-    /*if(iscldy_subarea[jsub]) {
-      mam_amicphys_1subarea_cloudy(
-          sub_config, nstep, deltat, jsub, nsubarea, iscldy_subarea[jsub],
-          afracsub[jsub], temp, pmid, pdel, zmid, pblh, relhumsub[jsub], dgn_a,
-          dgn_awet, wetdens, qgas1, qgas3, qgas4, qgas_delaa, qnum3, qnum4,
-          qnum_delaa, qaer2, qaer3, qaer4, qaer_delaa, qwtr3, qwtr4, qnumcw3,
-          qnumcw4, qnumcw_delaa, qaercw2, qaercw3, qaercw4, qaercw_delaa);
-    } else {
-      mam_amicphys_1subarea_clear(
-          sub_config, nstep, deltat, jsub, nsubarea, iscldy_subarea[jsub],
-          afracsub[jsub], temp, pmid, pdel, zmid, pblh, relhumsub[jsub], dgn_a,
-          dgn_awet, wetdens, qgas1, qgas3, qgas4, qgas_delaa, qnum3, qnum4,
-          qnum_delaa, qaer3, qaer4, qaer_delaa, qwtr3, qwtr4);
-      // map gas/aer/num arrays (mix-ratio and del=change) back to
-      // sub-area arrays
-
-      if(do_map_gas_sub) {
-        for(int igas = 0; igas < max_gas(); ++igas) {
-          const int l    = lmap_gas(igas);
-          qsub4[l][jsub] = qgas4[igas] / fcvt_gas(igas);
-          if(kk == 48)
-            printf("qsub4:%0.15E,%0.15E,%0.15E,%i,%i,%i\n", qsub4[l][jsub],
-                   qgas4[igas], fcvt_gas(igas), l, jsub, igas);
-          for(int i = 0; i < nqtendaa(); ++i)
-            qsub_tendaa[l][i][jsub] =
-                qgas_delaa[igas][i] / (fcvt_gas(igas) * deltat);
-        }
-      }
-      for(int n = 0; n < num_modes; ++n) {
-        qsub4[n][jsub] = qnum4[n] / fcvt_num();
-        for(int i = 0; i < nqtendaa(); ++i)
-          qsub_tendaa[n][i][jsub] = qnum_delaa[n][i] / (fcvt_num() * deltat);
-        for(int iaer = 0; iaer < num_aerosol_ids; ++iaer) {
-          qsub4[iaer][jsub] = qaer4[iaer][n] / fcvt_aer(iaer);
-          for(int i = 0; i < nqtendaa(); ++i)
-            qsub_tendaa[iaer][i][jsub] =
-                qaer_delaa[iaer][n][i] / (fcvt_aer(iaer) * deltat);
-        }
-        qaerwatsub4[n][jsub] = qwtr4[n] / fcvt_wtr();
-
-        if(iscldy_subarea[jsub]) {
-          qqcwsub4[n][jsub] = qnumcw4[n] / fcvt_num();
-          for(int i = 0; i < nqqcwtendaa(); ++i)
-            qqcwsub_tendaa[n][i][jsub] =
-                qnumcw_delaa[n][i] / (fcvt_num() * deltat);
-          for(int iaer = 0; iaer < num_aerosol_ids; ++iaer) {
-            qqcwsub4[iaer][jsub] = qaercw4[iaer][n] / fcvt_aer(iaer);
-            for(int i = 0; i < nqqcwtendaa(); ++i)
-              qqcwsub_tendaa[iaer][i][jsub] =
-                  qaercw_delaa[iaer][n][i] / (fcvt_aer(iaer) * deltat);
-          }
-        }
-      }
+    // FIXME: Enable this functionality
+    /*if (nsubarea == 1 || !iscldy_subarea[jsub]) {
+     ncluster_tend_nnuc_1grid = ncluster_tend_nnuc_1grid &
+                                           +
+    misc_vars_aa_sub(jsub)%ncluster_tend_nnuc_1grid*afracsub(jsub)
     }*/
-  }
-}
+
+    // map gas/aer/num arrays (mix-ratio and del=change) back to sub-area arrays
+
+    if(do_map_gas_sub) {
+      for(int igas = 0; igas < max_gas(); ++igas) {
+        int ll          = lmap_gas(igas);
+        qsub4[ll][jsub] = qgas4[igas] / fcvt_gas(igas);
+        if(kk == 48)
+          printf("qsub4_0:  %0.15E,  %0.15E,  %0.15E, %i, %i, %i, %i\n",
+                 qsub4[ll][jsub], qgas4[igas], fcvt_gas(igas), ll, jsub, igas,
+                 max_gas());
+        for(int jj = 0; jj < nqtendaa(); ++jj) {
+          qsub_tendaa[ll][jj][jsub] =
+              qgas_delaa[igas][jj] / (fcvt_gas(igas) * deltat);
+        }
+        if(kk == 48)
+          printf("qsub4_1:  %0.15E,  %0.15E,  %0.15E,  %0.15E, %i, %i\n",
+                 qsub_tendaa[ll][0][jsub], qsub_tendaa[ll][1][jsub],
+                 qsub_tendaa[ll][2][jsub], qsub_tendaa[ll][3][jsub], ll, jsub);
+      }  // igas
+    }    // do_map_gas_sub
+
+    for(int imode = 0; imode < num_modes; ++imode) {
+      int ll          = lmap_num(imode);
+      qsub4[ll][jsub] = qnum4[imode] / (fcvt_num());
+      if(kk == 48)
+        printf("qsub4_2:  %0.15E, %i, %i\n", qsub4[ll][jsub], ll, jsub);
+      for(int jj = 0; jj < nqtendaa(); ++jj) {
+        qsub_tendaa[ll][jj][jsub] =
+            qnum_delaa[imode][jj] / (fcvt_num() * deltat);
+      }
+      if(kk == 48)
+        printf("qsub4_3:  %0.15E,  %0.15E,  %0.15E,  %0.15E, %i, %i\n",
+               qsub_tendaa[ll][0][jsub], qsub_tendaa[ll][1][jsub],
+               qsub_tendaa[ll][2][jsub], qsub_tendaa[ll][3][jsub], ll, jsub);
+      for(int iaer = 0; iaer < num_aerosol_ids; ++iaer) {
+        int la = lmap_aer(iaer, imode);
+        if(la > 0) {
+          qsub4[la][jsub] = qaer4[iaer][imode] / fcvt_aer(iaer);
+          if(kk == 48)
+            printf("qsub4_4:  %0.15E, %i, %i\n", qsub4[la][jsub], ll, jsub);
+          for(int jj = 0; jj < nqtendaa(); ++jj) {
+            qsub_tendaa[la][jj][jsub] =
+                qaer_delaa[iaer][imode][jj] / (fcvt_aer(iaer) * deltat);
+          }  // jj
+          if(kk == 48)
+            printf("qsub4_5:  %0.15E,  %0.15E,  %0.15E,  %0.15E, %i, %i\n",
+                   qsub_tendaa[la][0][jsub], qsub_tendaa[la][1][jsub],
+                   qsub_tendaa[la][2][jsub], qsub_tendaa[la][3][jsub], la,
+                   jsub);
+        }  // la
+      }    // iaer
+      qaerwatsub4[imode][jsub] = qwtr4[imode] / fcvt_wtr();
+
+      if(iscldy_subarea[jsub]) {
+        int lc             = lmap_numcw(imode);
+        qqcwsub4[lc][jsub] = qnumcw4[imode] / fcvt_num();
+        if(kk == 48)
+          printf("qsub4_6:  %0.15E, %i, %i\n", qqcwsub4[lc][jsub], lc, jsub);
+        for(int jj = 0; jj < nqqcwtendaa(); ++jj) {
+          qqcwsub_tendaa[lc][jj][jsub] =
+              qnumcw_delaa[imode][jj] / (fcvt_num() * deltat);
+          if(kk == 48)
+            printf("qsub4_7:  %0.15E, %i, %i\n", qqcwsub_tendaa[lc][0][jsub],
+                   lc, jsub);
+        }  // jj
+        for(int iaer = 0; iaer < num_aerosol_ids; ++iaer) {
+          int lca = lmap_aercw(iaer, imode);
+          if(lca > 0) {
+            qqcwsub4[lca][jsub] = qaercw4[iaer][imode] / fcvt_aer(iaer);
+            if(kk == 48)
+              printf("qsub4_8:  %0.15E, %i, %i\n", qqcwsub4[lca][jsub], lca,
+                     jsub);
+            for(int jj = 0; jj < nqqcwtendaa(); ++jj) {
+              qqcwsub_tendaa[lca][jj][jsub] =
+                  qaercw_delaa[iaer][imode][jj] / (fcvt_aer(iaer) * deltat);
+            }  // jj
+            if(kk == 48)
+              printf("qsub4_9:  %0.15E, %i, %i\n", qqcwsub_tendaa[lca][0][jsub],
+                     lca, jsub);
+          }  // lca
+        }    // iaer
+      }      // iscldy_subarea
+    }        // imode
+
+  }  // main_jsub_loop
+}  // mam_amicphys_1gridcell
 
 }  // anonymous namespace
 
