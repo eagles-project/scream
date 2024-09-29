@@ -1164,7 +1164,7 @@ void MAMMicrophysics::run_impl(const double dt) {
               }
 
               impl::modal_aero_amicphys_intr(
-                  icol, k, config.amicphys, step, dt, temp, pmid, pdel, zm,
+                  k, config.amicphys, step, dt, temp, pmid, pdel, zm,
                   pblh,                                      // in
                   qv, cldfrac,                               // in
                   vmr, vmrcw,                                // out

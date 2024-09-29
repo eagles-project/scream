@@ -1128,7 +1128,6 @@ void assign_3d_array(
 
 //--------------------------------------------------------------------------------
 // Call aerosol microphysics processes for a single (cloudy or clear) subarea
-// (with indices = lchnk,ii,kk,jsubarea)
 //
 // qgas3, qaer3, qaercw3, qnum3, qnumcw3 are the current incoming TMRs
 // qgas_cur, qaer_cur, qaercw_cur, qnum_cur, qnumcw_cur are the updated
@@ -1162,10 +1161,10 @@ void mam_amicphys_1subarea(
     // in
     const int newnuc_h2so4_conc_optaa, const int gaexch_h2so4_uptake_optaa,
     const bool do_cond_sub, const bool do_rename_sub, const bool do_newnuc_sub,
-    const bool do_coag_sub, const int ii, const int kk, const Real deltat,
-    const int jsubarea, const int nsubarea, const bool iscldy_subarea,
-    const Real afracsub, const Real temp, const Real pmid, const Real pdel,
-    const Real zmid, const Real pblh, const Real relhumsub,
+    const bool do_coag_sub, const int kk, const Real deltat, const int jsubarea,
+    const int nsubarea, const bool iscldy_subarea, const Real afracsub,
+    const Real temp, const Real pmid, const Real pdel, const Real zmid,
+    const Real pblh, const Real relhumsub,
     const Real (&dgn_a)[AeroConfig::num_modes()],
     const Real (&dgn_awet)[AeroConfig::num_modes()],
     const Real (&wetdens)[AeroConfig::num_modes()],
@@ -1204,14 +1203,12 @@ void mam_amicphys_1subarea(
                         [nqqcwtendaa()])
 
 {
-
-  
   // do_cond_sub, do_rename_sub: true if the aero. microp. process is
   //                             calculated in this subarea
   // do_newnuc_sub, do_coag_sub: true if the aero.  microp. process is
   //                             calculated in this subarea
   // iscldy_subarea: true if sub-area is cloudy
-  // ii, kk: column and level indices
+  // kk: level indices
   // jsubarea, nsubarea: sub-area index, number of sub-areas
   // afracsub: fractional area of subarea [unitless, 0-1]
   // deltat: time step [s]
@@ -1823,7 +1820,7 @@ void mam_amicphys_1subarea(
 
       mam4::coagulation::mam_coag_1subarea(
           dtsubstep, temp, pmid, aircon,             // in
-          dgn_awet, wetdens,                  // in
+          dgn_awet, wetdens,                         // in
           qnum_cur, qaer_cur, qaer_delsub_coag_in);  // inout, inout, out
 
       for(int im = 0; im < nmodes; ++im) {
@@ -1956,7 +1953,8 @@ void mam_amicphys_1subarea(
 
 KOKKOS_INLINE_FUNCTION
 void mam_amicphys_1gridcell(
-    const int ii, const int kk, const AmicPhysConfig &config, const int nstep,
+    // in
+    const int kk, const AmicPhysConfig &config, const int nstep,
     const Real deltat, const int nsubarea, const int ncldy_subarea,
     const bool (&iscldy_subarea)[maxsubarea()],
     const Real (&afracsub)[maxsubarea()], const Real temp, const Real pmid,
@@ -1971,13 +1969,12 @@ void mam_amicphys_1gridcell(
     const Real (&qsub3)[gas_pcnst()][maxsubarea()],
     const Real (&qqcwsub3)[gas_pcnst()][maxsubarea()],
     const Real (&qaerwatsub3)[AeroConfig::num_modes()][maxsubarea()],
+    // out
     Real (&qsub4)[gas_pcnst()][maxsubarea()],
     Real (&qqcwsub4)[gas_pcnst()][maxsubarea()],
     Real (&qaerwatsub4)[AeroConfig::num_modes()][maxsubarea()],
     Real (&qsub_tendaa)[gas_pcnst()][nqtendaa()][maxsubarea()],
     Real (&qqcwsub_tendaa)[gas_pcnst()][nqqcwtendaa()][maxsubarea()]) {
-
-
   //
   // calculates changes to gas and aerosol sub-area TMRs (tracer mixing
   // ratios) qsub3 and qqcwsub3 are the incoming current TMRs qsub4 and
@@ -2001,36 +1998,31 @@ void mam_amicphys_1gridcell(
   static constexpr int num_modes        = AeroConfig::num_modes();
   static constexpr int num_aerosol_ids  = AeroConfig::num_aerosol_ids();
 
- 
-
   // the q--4 values will be equal to q--3 values unless they get changed
-  for(int i = 0; i < num_gas_ids; ++i){
+  for(int i = 0; i < num_gas_ids; ++i) {
     for(int j = 1; j < maxsubarea(); ++j) {
       qsub4[i][j]    = qsub3[i][j];
       qqcwsub4[i][j] = qqcwsub3[i][j];
     }
   }
-  
-  for(int i = 0; i < num_modes; ++i){
-    for(int j = 0; j < maxsubarea(); ++j){
+
+  for(int i = 0; i < num_modes; ++i) {
+    for(int j = 0; j < maxsubarea(); ++j) {
       qaerwatsub4[i][j] = qaerwatsub3[i][j];
     }
   }
-  
-  
-  for(int i = 0; i < num_gas_ids; ++i){
-    for(int j = 0; j < nqtendaa(); ++j){
+
+  for(int i = 0; i < num_gas_ids; ++i) {
+    for(int j = 0; j < nqtendaa(); ++j) {
       for(int kk = 1; kk < maxsubarea(); ++kk) qsub_tendaa[i][j][kk] = 0;
     }
   }
-  
-  for(int i = 0; i < num_gas_ids; ++i){
-    for(int j = 0; j < nqqcwtendaa(); ++j){
+
+  for(int i = 0; i < num_gas_ids; ++i) {
+    for(int j = 0; j < nqqcwtendaa(); ++j) {
       for(int kk = 1; kk < maxsubarea(); ++kk) qqcwsub_tendaa[i][j][kk] = 0;
     }
   }
-
-
 
   for(int jsub = 1; jsub <= nsubarea; ++jsub) {
     AmicPhysConfig sub_config = config;
@@ -2071,7 +2063,6 @@ void mam_amicphys_1gridcell(
              jsub);
     const bool do_map_gas_sub = do_cond || do_newnuc;
 
-
     // map incoming sub-area mix-ratios to gas/aer/num arrays
     // Initialized to zero; C++ automatically initialze to
     // all elements to zero if fisrt is initialized to zero as
@@ -2103,7 +2094,6 @@ void mam_amicphys_1gridcell(
     Real qnum4[num_modes]                  = {0};
     Real qwtr3[num_modes]                  = {0};
     Real qwtr4[num_modes]                  = {0};
-
 
     for(int imode = 0; imode < num_modes; ++imode) {
       const int ln = lmap_num(imode);
@@ -2138,8 +2128,6 @@ void mam_amicphys_1gridcell(
       }
     }
 
-
-    
     Real qaercw2[num_aerosol_ids][num_modes] = {0};
     Real qnumcw2[num_modes]                  = {0};
     Real qaercw3[num_aerosol_ids][num_modes] = {0};
@@ -2159,7 +2147,6 @@ void mam_amicphys_1gridcell(
       }  // iaer
     }    // imode
 
-   
     // FIXME: Remove code above till FIXME
     if(iscldy_subarea[jsub]) {
       // BALLI : FIXME: IT IS IMPORTANT TO INIT THE FOLOWING TO ZERO!!!
@@ -2193,8 +2180,6 @@ void mam_amicphys_1gridcell(
       }      // imode
     }        // iscldy_subarea
 
-    
-
     if(kk == 48) {
       for(int imode = 0; imode < num_modes; ++imode) {
         printf("NUMCW_1:%.15e,%.15e,%.15e,%i\n", qnumcw2[imode], qnumcw3[imode],
@@ -2216,16 +2201,15 @@ void mam_amicphys_1gridcell(
     Real qaercw_delaa[num_aerosol_ids][num_modes][nqqcwtendaa()] = {};
 
     // FIXME: write in-outs!!
-    
+
     mam_amicphys_1subarea(
         config.gaexch_h2so4_uptake_optaa, config.newnuc_h2so4_conc_optaa,
-        do_cond, do_rename, do_newnuc, do_coag, ii, kk, deltat, jsub, nsubarea,
+        do_cond, do_rename, do_newnuc, do_coag, kk, deltat, jsub, nsubarea,
         iscldy_subarea[jsub], afracsub[jsub], temp, pmid, pdel, zmid, pblh,
         relhumsub[jsub], dgn_a, dgn_awet, wetdens, qgas1, qgas3, qgas4,
         qgas_delaa, qnum3, qnum4, qnum_delaa, qaer2, qaer3, qaer4, qaer_delaa,
         qwtr3, qwtr4, qnumcw3, qnumcw4, qnumcw_delaa, qaercw2, qaercw3, qaercw4,
         qaercw_delaa);
-    
 
     // FIXME: Enable this functionality
     /*if (nsubarea == 1 || !iscldy_subarea[jsub]) {
@@ -2326,11 +2310,11 @@ void mam_amicphys_1gridcell(
 
 KOKKOS_INLINE_FUNCTION
 void modal_aero_amicphys_intr(
-    int ii, int kk, const AmicPhysConfig &config, const int nstep,
-    const Real deltat, const Real temp, const Real pmid, const Real pdel,
-    const Real zm, const Real pblh, const Real qv, const Real cld,
-    Real q[gas_pcnst()], Real qqcw[gas_pcnst()],
-    const Real q_pregaschem[gas_pcnst()], const Real q_precldchem[gas_pcnst()],
+    int kk, const AmicPhysConfig &config, const int nstep, const Real deltat,
+    const Real temp, const Real pmid, const Real pdel, const Real zm,
+    const Real pblh, const Real qv, const Real cld, Real q[gas_pcnst()],
+    Real qqcw[gas_pcnst()], const Real q_pregaschem[gas_pcnst()],
+    const Real q_precldchem[gas_pcnst()],
     const Real qqcw_precldchem[gas_pcnst()],
     Real q_tendbb[gas_pcnst()][nqtendbb()],
     Real qqcw_tendbb[gas_pcnst()][nqtendbb()],
@@ -2455,8 +2439,8 @@ void modal_aero_amicphys_intr(
   // calculates qaerwat using the grid-cell mean interstital-aerosol
   // mix-rats and the clear-area RH. aerosol water mixing ratios (mol/mol)
   Real qaerwatsub3[num_modes][maxsubarea()];
-  assign_2d_array(num_modes, maxsubarea(), 0.0, // in
-                qaerwatsub3);           // out
+  assign_2d_array(num_modes, maxsubarea(), 0.0,  // in
+                  qaerwatsub3);                  // out
 
   //-------------------------------------------------------------------------
   // Set gases, interstitial aerosols, and cloud-borne aerosols in subareas
@@ -2502,19 +2486,6 @@ void modal_aero_amicphys_intr(
   }
 
   if(kk == 48) {
-    for(int ii = 0; ii < num_modes; ++ii) {
-      for(int jj = 0; jj < maxsubarea(); ++jj) {
-        // printf("amic2:%.15e,%i, %i\n", qaerwatsub3[ii][jj], ii, jj);
-      }
-    }
-  }
-
-  if(kk == 48) {
-    for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
-      // printf("lmapcc_aa:%i, %i\n", lmapcc_all(icnst), icnst);
-    }
-  }
-  if(kk == 48) {
     for(int jsub = 1; jsub < maxsubarea(); ++jsub) {
       for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
         printf("amic3:%.15e,%.15e,%.15e,%.15e,%.15e,%i, %i\n",
@@ -2525,8 +2496,8 @@ void modal_aero_amicphys_intr(
   }
 
   //  Initialize the "after-amicphys" values
-  Real qsub4[gas_pcnst()][maxsubarea()]                   = {};
-  Real qqcwsub4[gas_pcnst()][maxsubarea()]                = {};
+  Real qsub4[gas_pcnst()][maxsubarea()]     = {};
+  Real qqcwsub4[gas_pcnst()][maxsubarea()]  = {};
   Real qaerwatsub4[num_modes][maxsubarea()] = {};
 
   //
@@ -2550,16 +2521,13 @@ void modal_aero_amicphys_intr(
   Real qsub_tendaa[gas_pcnst()][nqtendaa()][maxsubarea()]       = {};
   Real qqcwsub_tendaa[gas_pcnst()][nqqcwtendaa()][maxsubarea()] = {};
   mam_amicphys_1gridcell(
-      ii, kk, config, nstep, deltat, nsubarea, ncldy_subarea,  // in
-      iscldy_subarea, afracsub, temp, pmid, pdel, zm,          // in
-      pblh,                                                    // in
-      relhumsub,                                               // in
-      // FIXME: dgn_a, dgn_awet, wetdens seems like "in", confirm it
-      dgn_a, dgn_awet, wetdens,                   // inout
-      qsub1, qsub2, qqcwsub2, qsub3, qqcwsub3,    // in
-      qaerwatsub3, qsub4, qqcwsub4, qaerwatsub4,  // inout
-      qsub_tendaa, qqcwsub_tendaa);               // inout
-      
+      // in
+      kk, config, nstep, deltat, nsubarea, ncldy_subarea, iscldy_subarea,
+      afracsub, temp, pmid, pdel, zm, pblh, relhumsub, dgn_a, dgn_awet, wetdens,
+      qsub1, qsub2, qqcwsub2, qsub3, qqcwsub3,
+      // inout
+      qaerwatsub3, qsub4, qqcwsub4, qaerwatsub4, qsub_tendaa, qqcwsub_tendaa);
+
   if(kk == 48) {
     for(int n = 0; n < num_modes; ++n) {
       printf("AFT:dgn_a:   %0.15E,   %0.15E, %i\n", dgn_a[n], dgncur_a[n], n);
@@ -2568,12 +2536,12 @@ void modal_aero_amicphys_intr(
     }
     for(int jsub = 1; jsub < maxsubarea(); ++jsub) {
       for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
-         printf("amic4_1:   %.15e,   %.15e, %i, %i\n", qsub4[icnst][jsub],
-                qqcwsub4[icnst][jsub], icnst + 1, jsub);
+        printf("amic4_1:   %.15e,   %.15e, %i, %i\n", qsub4[icnst][jsub],
+               qqcwsub4[icnst][jsub], icnst + 1, jsub);
       }
       for(int icnst = 0; icnst < num_modes; ++icnst) {
-         printf("amic4_2:   %.15e,   %.15e, %i, %i\n", qaerwatsub3[icnst][jsub],
-                qaerwatsub4[icnst][jsub], icnst + 1, jsub);
+        printf("amic4_2:   %.15e,   %.15e, %i, %i\n", qaerwatsub3[icnst][jsub],
+               qaerwatsub4[icnst][jsub], icnst + 1, jsub);
       }
     }
   }
@@ -2656,7 +2624,6 @@ void modal_aero_amicphys_intr(
     if(iqqcwtend_rnam() < nqqcwtendbb())
       qqcw_tendbb[i][iqqcwtend_rnam()] = qqcwgcm_tendaa[i][iqqcwtend_rnam()];
   }
-
-}
+} //modal_aero_amicphys_intr
 
 }  // namespace scream::impl
