@@ -69,7 +69,6 @@ void mam_amicphys_1gridcell(
     const int kk, const Real (&dgn_a)[AeroConfig::num_modes()],
     const Real (&qsub3)[gas_pcnst()][maxsubarea()],
     const Real (&qqcwsub3)[gas_pcnst()][maxsubarea()],
-    const Real (&qaerwatsub3)[AeroConfig::num_modes()][maxsubarea()],
     Real (&qsub4)[gas_pcnst()][maxsubarea()],
     Real (&qqcwsub4)[gas_pcnst()][maxsubarea()],
     Real (&qaerwatsub4)[AeroConfig::num_modes()][maxsubarea()]) {
@@ -84,7 +83,7 @@ void mam_amicphys_1gridcell(
   }
 
   for(int i = 0; i < num_gas_ids; ++i) {
-    for(int j = 1; j <= maxsubarea(); ++j) {
+    for(int j = 1; j < maxsubarea(); ++j) {
       qsub4[i][j]    = qsub3[i][j];
       qqcwsub4[i][j] = qqcwsub3[i][j];
     }
@@ -93,7 +92,7 @@ void mam_amicphys_1gridcell(
     printf("mam_amicphys_1gridcell_1b:dgn_a:   %0.15E, %i\n", dgn_a[0], 0);
   }
   for(int i = 0; i < num_modes; ++i) {
-    for(int j = 0; j <= maxsubarea(); ++j) {
+    for(int j = 0; j < maxsubarea(); ++j) {
       qaerwatsub4[i][j] = -9999;  // qaerwatsub3[i][j];
     }
   }
@@ -146,7 +145,7 @@ void modal_aero_amicphys_intr(int kk,
   }
 
   mam_amicphys_1gridcell(kk, dgn_a, qsub3, qqcwsub3,                  // in
-                         qaerwatsub3, qsub4, qqcwsub4, qaerwatsub4);  // inout
+                          qsub4, qqcwsub4, qaerwatsub4);  // inout
 }
 
 }  // namespace scream::impl
