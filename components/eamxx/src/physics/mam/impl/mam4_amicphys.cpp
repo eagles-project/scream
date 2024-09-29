@@ -2005,28 +2005,28 @@ void mam_amicphys_1gridcell(
 
   // the q--4 values will be equal to q--3 values unless they get changed
   for(int i = 0; i < num_gas_ids; ++i){
-    for(int j = 1; j <= maxsubarea(); ++j) {
+    for(int j = 1; j < maxsubarea(); ++j) {
       qsub4[i][j]    = qsub3[i][j];
       qqcwsub4[i][j] = qqcwsub3[i][j];
     }
   }
   
   for(int i = 0; i < num_modes; ++i){
-    for(int j = 0; j <= maxsubarea(); ++j){
-      qaerwatsub4[i][j] = 0;//qaerwatsub3[i][j];
+    for(int j = 0; j < maxsubarea(); ++j){
+      qaerwatsub4[i][j] = qaerwatsub3[i][j];
     }
   }
   
   
   for(int i = 0; i < num_gas_ids; ++i){
     for(int j = 0; j < nqtendaa(); ++j){
-      for(int kk = 1; kk <= maxsubarea(); ++kk) qsub_tendaa[i][j][kk] = 0;
+      for(int kk = 1; kk < maxsubarea(); ++kk) qsub_tendaa[i][j][kk] = 0;
     }
   }
   
   for(int i = 0; i < num_gas_ids; ++i){
     for(int j = 0; j < nqqcwtendaa(); ++j){
-      for(int kk = 1; kk <= maxsubarea(); ++kk) qqcwsub_tendaa[i][j][kk] = 0;
+      for(int kk = 1; kk < maxsubarea(); ++kk) qqcwsub_tendaa[i][j][kk] = 0;
     }
   }
 
