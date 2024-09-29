@@ -1163,8 +1163,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                 }
               }
 
-              impl::modal_aero_amicphys_intr(k, dgncur_a_kk, dgncur_awet_kk,
-                                             wetdens_kk);  // in
+              impl::modal_aero_amicphys_intr(k, dgncur_a_kk);  // in
 
               if(k == 48) {
                 for(int i = 10; i < 13; ++i) {
