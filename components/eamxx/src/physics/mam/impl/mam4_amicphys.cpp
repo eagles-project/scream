@@ -758,9 +758,9 @@ void set_subarea_gases_and_aerosols(
       cnst_is_gas[icnst] = (lmapcc_all(icnst) == lmapcc_val_gas());
     }
 
-    EKAT_KERNEL_ASSERT_MSG(nsubarea <= maxsubarea(),
+    EKAT_KERNEL_ASSERT_MSG(nsubarea < maxsubarea(),
                            "Error! set_subarea_gases_and_aerosols: "
-                           "nsubarea should be <= maxsubarea() \n");
+                           "nsubarea should be < maxsubarea() \n");
     for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
       if(cnst_is_gas[icnst]) {
         // For gases, assume both 1 and 2 subareas have grid mean values
@@ -2026,9 +2026,9 @@ void mam_amicphys_1gridcell(
     }
   }
 
-  EKAT_KERNEL_ASSERT_MSG(nsubarea <= maxsubarea(),
+  EKAT_KERNEL_ASSERT_MSG(nsubarea < maxsubarea(),
                          "Error! mam_amicphys_1gridcell: "
-                         "nsubarea should be <= maxsubarea() \n");
+                         "nsubarea should be < maxsubarea() \n");
   for(int jsub = 1; jsub <= nsubarea; ++jsub) {
     AmicPhysConfig sub_config = config;
     // FIXME: Remove the code below after removing
@@ -2348,9 +2348,9 @@ void form_gcm_of_gases_and_aerosols_from_subareas(
   assign_1d_array(gas_pcnst(), 0.0,  // in
                   qgcm);             // out
 
-  EKAT_KERNEL_ASSERT_MSG(nsubarea <= maxsubarea(),
+  EKAT_KERNEL_ASSERT_MSG(nsubarea < maxsubarea(),
                          "Error! form_gcm_of_gases_and_aerosols_from_subareas: "
-                         "nsubarea should be <= maxsubarea() \n");
+                         "nsubarea should be < maxsubarea() \n");
 
   for(int jsub = 1; jsub <= nsubarea; ++jsub) {
     for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
@@ -2372,11 +2372,122 @@ void form_gcm_of_gases_and_aerosols_from_subareas(
                     qqcwgcm);          // out
     for(int jsub = 1; jsub <= nsubarea; ++jsub) {
       for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
-        qqcwgcm[icnst] = qqcwgcm[icnst] + qqcwsub[icnst][jsub] * afracsub[jsub];
+        qqcwgcm[icnst] += qqcwsub[icnst][jsub] * afracsub[jsub];
       }
     }
   }  // if ncldy_subarea
 }  // form_gcm_of_gases_and_aerosols_from_subareas
+
+//--------------------------------------------------------------------------------
+// Purpose: Get grid cell mean tendencies by calculating area-weighted averages
+//          of the values in different subareas.
+//--------------------------------------------------------------------------------
+
+void get_gcm_tend_diags_from_subareas(
+    const int kk,
+    // in
+    const int nsubarea, const int ncldy_subarea,
+    const Real (&afracsub)[maxsubarea()],
+    const Real (&qsub_tendaa)[gas_pcnst()][nqtendaa()][maxsubarea()],
+    const Real (&qqcwsub_tendaa)[gas_pcnst()][nqqcwtendaa()][maxsubarea()],
+    // out
+    Real (&qgcm_tendaa)[gas_pcnst()][nqtendaa()],
+    Real (&qqcwgcm_tendaa)[gas_pcnst()][nqqcwtendaa()]) {
+  // nsubarea: # of active subareas
+  // ncldy_subarea: # of cloudy subareas
+  // afracsub(maxsubarea): area fraction of subareas [unitless]
+
+  // Gases and interstitial aerosols
+  assign_2d_array(gas_pcnst(), nqtendaa(), 0.0,  // in
+                  qgcm_tendaa);                  // out
+
+  EKAT_KERNEL_ASSERT_MSG(nsubarea < maxsubarea(),
+                         "Error! get_gcm_tend_diags_from_subareas: "
+                         "nsubarea should be < maxsubarea() \n");
+
+  for(int jsub = 1; jsub <= nsubarea; ++jsub) {
+    for(int iq = 0; iq < nqtendaa(); ++iq) {
+      for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+        qgcm_tendaa[icnst][iq] += qsub_tendaa[icnst][iq][jsub] * afracsub[jsub];
+      }
+    }
+  }
+
+  // Cloud-borne aerosols
+
+  assign_2d_array(gas_pcnst(), nqqcwtendaa(), 0.0,  // in
+                  qqcwgcm_tendaa);                  // out
+  if(ncldy_subarea > 0) {
+    for(int jsub = 1; jsub <= nsubarea; ++jsub) {
+      for(int iq = 0; iq < nqqcwtendaa(); ++iq) {
+        for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+          if(kk == 48)
+            printf("amic_test1:   %.15E, %i %i %i\n", qqcwgcm_tendaa[icnst][iq],
+                   icnst, iq, jsub);
+
+          qqcwgcm_tendaa[icnst][iq] +=
+              qqcwsub_tendaa[icnst][iq][jsub] * afracsub[jsub];
+          if(kk == 48)
+            printf("amic_test2:   %.15E,   %.15E, %i %i %i\n",
+                   qqcwgcm_tendaa[icnst][iq], qqcwsub_tendaa[icnst][iq][jsub],
+                   icnst, iq, jsub);
+        }
+      }
+    }
+  }  // if (ncldy_subarea
+}  // get_gcm_tend_diags_from_subareas
+
+//-------------------------------------------------------------------------------
+// Purpose: add mass-weighted tendencies to the corresponding vertical integrals
+//-------------------------------------------------------------------------------
+void accumulate_column_tend_integrals(
+    // in
+    const Real pdel, const Real gravit,
+    const Real (&qgcm_tendaa)[gas_pcnst()][nqtendaa()],
+    const Real (&qqcwgcm_tendaa)[gas_pcnst()][nqqcwtendaa()],
+    // out
+    Real (&q_coltendaa)[gas_pcnst()][nqtendaa()],
+    Real (&qqcw_coltendaa)[gas_pcnst()][nqqcwtendaa()]) {
+#if 0
+  use modal_aero_amicphys_control, only: wp=>r8, ncnst=>gas_pcnst
+
+  real(wp),intent(in) :: pdel       // layer thickness in pressure coordinate [Pa]
+  real(wp),intent(in) :: gravit     // gravitational acceleration [m/s^2]
+
+  real(wp),intent(in)    ::    qgcm_tendaa(ncnst,   nqtendaa)
+  real(wp),intent(in)    :: qqcwgcm_tendaa(ncnst,nqqcwtendaa)
+
+  real(wp),intent(inout) ::    q_coltendaa(ncnst,   nqtendaa)
+  real(wp),intent(inout) :: qqcw_coltendaa(ncnst,nqqcwtendaa)
+
+  real(wp) :: pdel_fac   // = air density * dz
+
+  integer :: iqtend  // loop index corresponding to different aerosol processes
+  integer :: icnst   // loop index corresponding to different constituents (tracers)
+
+  pdel_fac = pdel/gravit
+
+  // Gases and interstitial aerosols
+
+  do iqtend = 1,nqtendaa
+  do icnst = 1,ncnst
+     if ( do_q_coltendaa(icnst,iqtend) ) then
+        q_coltendaa(icnst,iqtend) = q_coltendaa(icnst,iqtend) + qgcm_tendaa(icnst,iqtend)*pdel_fac
+     end if
+  end do // icnst
+  end do // iqtend
+
+  // cloud-borne aerosols
+
+  do iqtend = 1,nqqcwtendaa 
+  do icnst = 1,ncnst
+     if ( do_qqcw_coltendaa(icnst,iqtend) ) then
+        qqcw_coltendaa(icnst,iqtend) = qqcw_coltendaa(icnst,iqtend) + qqcwgcm_tendaa(icnst,iqtend)*pdel_fac
+     end if
+  end do // icnst
+  end do // iqtend
+#endif
+}  // accumulate_column_tend_integrals
 
 }  // anonymous namespace
 
@@ -2492,9 +2603,9 @@ void modal_aero_amicphys_intr(
   setup_subareas(kk, cld,                                  // in
                  nsubarea, ncldy_subarea, jclea, jcldy,    // out
                  iscldy_subarea, afracsub, fclea, fcldy);  // out
-  EKAT_KERNEL_ASSERT_MSG(nsubarea <= maxsubarea(),
+  EKAT_KERNEL_ASSERT_MSG(nsubarea < maxsubarea(),
                          "Error! modal_aero_amicphys_intr: "
-                         "nsubarea should be <= maxsubarea() \n");
+                         "nsubarea should be < maxsubarea() \n");
 
   const Real relhumgcm = haero::max(0.0, haero::min(1.0, qv / qv_sat));
   if(kk == 48) {
@@ -2611,12 +2722,21 @@ void modal_aero_amicphys_intr(
     }
     for(int jsub = 1; jsub < maxsubarea(); ++jsub) {
       for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
-        printf("amic4_1:   %.15e,   %.15e, %i, %i\n", qsub4[icnst][jsub],
+        printf("amic_1:   %.15e,   %.15e, %i, %i\n", qsub4[icnst][jsub],
                qqcwsub4[icnst][jsub], icnst + 1, jsub);
       }
       for(int icnst = 0; icnst < num_modes; ++icnst) {
-        printf("amic4_2:   %.15e,   %.15e, %i, %i\n", qaerwatsub3[icnst][jsub],
+        printf("amic_2:   %.15e,   %.15e, %i, %i\n", qaerwatsub3[icnst][jsub],
                qaerwatsub4[icnst][jsub], icnst + 1, jsub);
+      }
+    }
+
+    for(int jsub = 1; jsub < maxsubarea(); ++jsub) {
+      for(int iq = 0; iq < nqqcwtendaa(); ++iq) {
+        for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+          printf("amic_3:   %.15e  %i  %i  %i\n",
+                 qqcwsub_tendaa[icnst][iq][jsub], icnst + 1, iq + 1, jsub);
+        }
       }
     }
   }
@@ -2660,12 +2780,50 @@ void modal_aero_amicphys_intr(
              icnst + 1);
     }
   }
+
+  //================================================================
+  // Process diagnostics of the current grid cell
+  //================================================================
+  Real qgcm_tendaa[gas_pcnst()][nqtendaa()];
+  Real qqcwgcm_tendaa[gas_pcnst()][nqqcwtendaa()];
+  get_gcm_tend_diags_from_subareas(kk,
+                                   // in
+                                   nsubarea, ncldy_subarea, afracsub,
+                                   qsub_tendaa, qqcwsub_tendaa,
+                                   // out
+                                   qgcm_tendaa, qqcwgcm_tendaa);
+
+  if(kk == 48) {
+    for(int iq = 0; iq < nqtendaa(); ++iq) {
+      for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+        printf("amic7_1:   %.15e, %i %i\n", qgcm_tendaa[icnst][iq], icnst + 1,
+               iq + 1);
+      }
+    }
+    for(int iq = 0; iq < nqqcwtendaa(); ++iq) {
+      for(int icnst = 0; icnst < gas_pcnst(); ++icnst) {
+        printf("amic8_1:   %.15e,   %.15e,   %.15e, %i %i\n",
+               qqcwgcm_tendaa[icnst][iq], afracsub[1], afracsub[2], icnst + 1,
+               iq + 1);
+      }
+    }
+  }
+
+#if 0
+
+      accumulate_column_tend_integrals( pdel, gravit,                         // in
+                                             qgcm_tendaa,         qqcwgcm_tendaa,         // in
+                                             q_coltendaa(ii,:,:), qqcw_coltendaa(ii,:,:)  )// inout
+
+      ncluster_3dtend_nnuc(ii,kk) = misc_vars_aa%ncluster_tend_nnuc_1grid
+
+#endif
+
   ///---OLD CODE BELOW!!!/////
 
   //
   // form new grid-mean mix-ratios
 
-  Real qgcm_tendaa[gas_pcnst()][nqtendaa()];
   Real qaerwatgcm4[num_modes];
   if(nsubarea == 1) {
     for(int i = 0; i < gas_pcnst(); ++i) {
@@ -2692,7 +2850,7 @@ void modal_aero_amicphys_intr(
       // for aerosol water use the clear sub-area value
       qaerwatgcm4[i] = qaerwatsub4[i][jclea - 1];
   }
-  Real qqcwgcm_tendaa[gas_pcnst()][nqqcwtendaa()];
+
   if(ncldy_subarea <= 0) {
     for(int i = 0; i < gas_pcnst(); ++i) qqcwgcm4[i] = haero::max(0.0, qqcw[i]);
     for(int i = 0; i < gas_pcnst(); ++i)
