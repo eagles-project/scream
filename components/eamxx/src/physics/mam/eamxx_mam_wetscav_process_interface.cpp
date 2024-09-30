@@ -1,4 +1,5 @@
 #include "physics/mam/eamxx_mam_wetscav_process_interface.hpp"
+#include <share/property_checks/field_within_interval_check.hpp>
 
 /*
 -----------------------------------------------------------------
@@ -176,7 +177,7 @@ void MAMWetscav::set_grids(
       // (interstitial) aerosol tracers of interest: mass (q) mixing ratios
       const char *int_mmr_field_name =
           mam_coupling::int_aero_mmr_field_name(imode, ispec);
-      if(strlen(int_mmr_field_name) > 0) {
+      if(int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
         add_field<Updated>(int_mmr_field_name, scalar3d_mid, q_unit, grid_name,
                            "tracers");
       }
@@ -186,7 +187,7 @@ void MAMWetscav::set_grids(
       // are not advected
       const char *cld_mmr_field_name =
           mam_coupling::cld_aero_mmr_field_name(imode, ispec);
-      if(strlen(cld_mmr_field_name) > 0) {
+      if(cld_mmr_field_name && strlen(cld_mmr_field_name) > 0) {
         add_field<Updated>(cld_mmr_field_name, scalar3d_mid, q_unit, grid_name);
       }
     }
@@ -254,6 +255,42 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
   // Input fields read in from IC file, namelist or other processes
   // ---------------------------------------------------------------
 
+  // Set property checks for fields in this process
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("T_mid"),m_grid,mam4::physical_min("T_mid"),mam4::physical_max("T_mid"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("qv"),m_grid,mam4::physical_min("qv"),mam4::physical_max("qv"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("qc"),m_grid,mam4::physical_min("qc"),mam4::physical_max("qc"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("nc"),m_grid,mam4::physical_min("nc"),mam4::physical_max("nc"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("qi"),m_grid,mam4::physical_min("qi"),mam4::physical_max("qi"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("ni"),m_grid,mam4::physical_min("ni"),mam4::physical_max("ni"),false);
+
+  // set wet/dry aerosol state data (interstitial aerosols only)
+  for (int m = 0; m < mam_coupling::num_aero_modes(); ++m) {
+    // interstitial aerosol tracers of interest: number (n) mixing ratios
+    const char* int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(m);
+    add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(int_nmr_field_name),m_grid,mam4::physical_min("nmr"),mam4::physical_max("nmr"),false);
+
+    // cloudborne aerosol tracers of interest: number (n) mixing ratios
+    const char* cld_nmr_field_name = mam_coupling::cld_aero_nmr_field_name(m);
+    add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(cld_nmr_field_name),m_grid,mam4::physical_min("nmr"),mam4::physical_max("nmr"),false);
+
+    for (int a = 0; a < mam_coupling::num_aero_species(); ++a) {
+      // (interstitial) aerosol tracers of interest: mass (q) mixing ratios
+      const char* int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
+      if (int_mmr_field_name && strlen(int_mmr_field_name) > 0)
+        add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(int_mmr_field_name),m_grid,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
+
+      // (cloudborne) aerosol tracers of interest: mass (q) mixing ratios
+      const char* cld_mmr_field_name = mam_coupling::cld_aero_mmr_field_name(m, a);
+      if (cld_mmr_field_name && strlen(cld_mmr_field_name) > 0)
+        add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(cld_mmr_field_name),m_grid,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
+    }
+  }
+  // set wet/dry aerosol-related gas state data
+  for (int g = 0; g < mam_coupling::num_aero_gases(); ++g) {
+    const char* mmr_field_name = mam_coupling::gas_mmr_field_name(g);
+    add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(mmr_field_name),m_grid,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
+  }
+
   // store fields only to be converted to dry mmrs in wet_atm_
   wet_atm_.qc = get_field_in("qc").get_view<const Real **>();
   wet_atm_.qi = get_field_in("qi").get_view<const Real **>();
@@ -316,7 +353,7 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
     for(int ispec = 0; ispec < mam_coupling::num_aero_species(); ++ispec) {
       const char *int_mmr_field_name =
           mam_coupling::int_aero_mmr_field_name(imode, ispec);
-      if(strlen(int_mmr_field_name) > 0) {
+      if(int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
         wet_aero_.int_aero_mmr[imode][ispec] =
             get_field_out(int_mmr_field_name).get_view<Real **>();
         dry_aero_.int_aero_mmr[imode][ispec] =
@@ -325,7 +362,7 @@ void MAMWetscav::initialize_impl(const RunType run_type) {
 
       const char *cld_mmr_field_name =
           mam_coupling::cld_aero_mmr_field_name(imode, ispec);
-      if(strlen(cld_mmr_field_name) > 0) {
+      if(cld_mmr_field_name && strlen(cld_mmr_field_name) > 0) {
         wet_aero_.cld_aero_mmr[imode][ispec] =
             get_field_out(cld_mmr_field_name).get_view<Real **>();
         dry_aero_.cld_aero_mmr[imode][ispec] =

@@ -90,7 +90,7 @@ void MAMOptics::set_grids(
     for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
       const char *int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
 
-      if(strlen(int_mmr_field_name) > 0) {
+      if(int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
         add_field<Updated>(int_mmr_field_name, scalar3d_mid, kg/kg,grid_name, "tracers");
       }
     }
@@ -104,7 +104,7 @@ void MAMOptics::set_grids(
       const char *cld_mmr_field_name =
           mam_coupling::cld_aero_mmr_field_name(m, a);
 
-      if(strlen(cld_mmr_field_name) > 0) {
+      if(cld_mmr_field_name && strlen(cld_mmr_field_name) > 0) {
         add_field<Updated>(cld_mmr_field_name, scalar3d_mid, kg/kg, grid_name);
       }
     }
@@ -177,7 +177,7 @@ void MAMOptics::initialize_impl(const RunType run_type) {
     for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
       const char *int_mmr_field_name =
           mam_coupling::int_aero_mmr_field_name(m, a);
-      if(strlen(int_mmr_field_name) > 0) {
+      if(int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
         wet_aero_.int_aero_mmr[m][a] =
             get_field_out(int_mmr_field_name).get_view<Real **>();
         dry_aero_.int_aero_mmr[m][a] = buffer_.dry_int_aero_mmr[m][a];
@@ -194,7 +194,7 @@ void MAMOptics::initialize_impl(const RunType run_type) {
     for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
       const char *cld_mmr_field_name =
           mam_coupling::cld_aero_mmr_field_name(m, a);
-      if(strlen(cld_mmr_field_name) > 0) {
+      if(cld_mmr_field_name && strlen(cld_mmr_field_name) > 0) {
         wet_aero_.cld_aero_mmr[m][a] =
             get_field_out(cld_mmr_field_name).get_view<Real **>();
         dry_aero_.cld_aero_mmr[m][a] = buffer_.dry_cld_aero_mmr[m][a];

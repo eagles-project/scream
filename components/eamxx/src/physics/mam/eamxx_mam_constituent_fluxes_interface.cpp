@@ -1,5 +1,6 @@
 #include <physics/mam/eamxx_mam_constituent_fluxes_functions.hpp>
 #include <physics/mam/eamxx_mam_constituent_fluxes_interface.hpp>
+#include <share/property_checks/field_within_interval_check.hpp>
 namespace scream {
 
 // ================================================================
@@ -174,6 +175,42 @@ void MAMConstituentFluxes::initialize_impl(const RunType run_type) {
   // ---------------------------------------------------------------
   // Input fields read in from IC file, namelist or other processes
   // ---------------------------------------------------------------
+
+  // Set property checks for fields in this process
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("T_mid"),grid_,mam4::physical_min("T_mid"),mam4::physical_max("T_mid"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("qv"),grid_,mam4::physical_min("qv"),mam4::physical_max("qv"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("qc"),grid_,mam4::physical_min("qc"),mam4::physical_max("qc"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("nc"),grid_,mam4::physical_min("nc"),mam4::physical_max("nc"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("qi"),grid_,mam4::physical_min("qi"),mam4::physical_max("qi"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("ni"),grid_,mam4::physical_min("ni"),mam4::physical_max("ni"),false);
+
+  // set wet/dry aerosol state data (interstitial aerosols only)
+  for (int m = 0; m < mam_coupling::num_aero_modes(); ++m) {
+    // interstitial aerosol tracers of interest: number (n) mixing ratios
+    const char* int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(m);
+    add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(int_nmr_field_name),grid_,mam4::physical_min("nmr"),mam4::physical_max("nmr"),false);
+
+    // cloudborne aerosol tracers of interest: number (n) mixing ratios
+    const char* cld_nmr_field_name = mam_coupling::cld_aero_nmr_field_name(m);
+    add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(cld_nmr_field_name),grid_,mam4::physical_min("nmr"),mam4::physical_max("nmr"),false);
+
+    for (int a = 0; a < mam_coupling::num_aero_species(); ++a) {
+      // (interstitial) aerosol tracers of interest: mass (q) mixing ratios
+      const char* int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
+      if (int_mmr_field_name && strlen(int_mmr_field_name) > 0)
+        add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(int_mmr_field_name),grid_,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
+
+      // (cloudborne) aerosol tracers of interest: mass (q) mixing ratios
+      const char* cld_mmr_field_name = mam_coupling::cld_aero_mmr_field_name(m, a);
+      if (cld_mmr_field_name && strlen(cld_mmr_field_name) > 0)
+        add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(cld_mmr_field_name),grid_,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
+    }
+  }
+  // set wet/dry aerosol-related gas state data
+  for (int g = 0; g < mam_coupling::num_aero_gases(); ++g) {
+    const char* mmr_field_name = mam_coupling::gas_mmr_field_name(g);
+    add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(mmr_field_name),grid_,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
+  }
 
   // Populate the wet atmosphere state with views from fields
   // FIMXE: specifically look which among these are actually used by the process

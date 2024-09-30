@@ -140,7 +140,7 @@ void MAMMicrophysics::set_grids(const std::shared_ptr<const GridsManager> grids_
     add_field<Updated>(int_nmr_field_name, scalar3d_layout_mid, n_unit, grid_name, "tracers");
     for (int a = 0; a < mam_coupling::num_aero_species(); ++a) {
       const char* int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
-      if (strlen(int_mmr_field_name) > 0) {
+      if (int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
         add_field<Updated>(int_mmr_field_name, scalar3d_layout_mid, kg/kg, grid_name, "tracers");
       }
     }
@@ -194,6 +194,31 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
 
   step_ = 0;
 
+  // Set property checks for fields in this process
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("T_mid"),grid_,mam4::physical_min("T_mid"),mam4::physical_max("T_mid"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("qv"),grid_,mam4::physical_min("qv"),mam4::physical_max("qv"),false);
+  add_postcondition_check<FieldWithinIntervalCheck>(get_field_out("qc"),grid_,mam4::physical_min("qc"),mam4::physical_max("qc"),false);
+  add_postcondition_check<FieldWithinIntervalCheck>(get_field_out("nc"),grid_,mam4::physical_min("nc"),mam4::physical_max("nc"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("qi"),grid_,mam4::physical_min("qi"),mam4::physical_max("qi"),false);
+  add_invariant_check<FieldWithinIntervalCheck>(get_field_in("ni"),grid_,mam4::physical_min("ni"),mam4::physical_max("ni"),false);
+
+  // set wet/dry aerosol state data (interstitial aerosols only)
+  for (int m = 0; m < mam_coupling::num_aero_modes(); ++m) {
+    const char* int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(m);
+    add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(int_nmr_field_name),grid_,mam4::physical_min("nmr"),mam4::physical_max("nmr"),false);
+
+    for (int a = 0; a < mam_coupling::num_aero_species(); ++a) {
+      const char* int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
+      if (int_mmr_field_name && strlen(int_mmr_field_name) > 0)
+        add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(int_mmr_field_name),grid_,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
+    }
+  }
+  // set wet/dry aerosol-related gas state data
+  for (int g = 0; g < mam_coupling::num_aero_gases(); ++g) {
+    const char* mmr_field_name = mam_coupling::gas_mmr_field_name(g);
+    add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(mmr_field_name),grid_,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
+  }
+
   // populate the wet and dry atmosphere states with views from fields and
   // the buffer
   wet_atm_.qv = get_field_in("qv").get_view<const Real**>();
@@ -232,7 +257,7 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
     dry_aero_.int_aero_nmr[m] = buffer_.dry_int_aero_nmr[m];
     for (int a = 0; a < mam_coupling::num_aero_species(); ++a) {
       const char* int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
-      if (strlen(int_mmr_field_name) > 0) {
+      if (int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
         wet_aero_.int_aero_mmr[m][a] = get_field_out(int_mmr_field_name).get_view<Real**>();
         dry_aero_.int_aero_mmr[m][a] = buffer_.dry_int_aero_mmr[m][a];
       }
