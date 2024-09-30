@@ -139,10 +139,9 @@ void MAMMicrophysics::set_grids(const std::shared_ptr<const GridsManager> grids_
     const char* int_nmr_field_name = mam_coupling::int_aero_nmr_field_name(m);
     add_field<Updated>(int_nmr_field_name, scalar3d_layout_mid, n_unit, grid_name, "tracers");
     for (int a = 0; a < mam_coupling::num_aero_species(); ++a) {
-      const char* int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
-      if (int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
+      const std::string int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
+      if (!int_mmr_field_name.empty())
         add_field<Updated>(int_mmr_field_name, scalar3d_layout_mid, kg/kg, grid_name, "tracers");
-      }
     }
   }
 
@@ -208,8 +207,8 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
     add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(int_nmr_field_name),grid_,mam4::physical_min("nmr"),mam4::physical_max("nmr"),false);
 
     for (int a = 0; a < mam_coupling::num_aero_species(); ++a) {
-      const char* int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
-      if (int_mmr_field_name && strlen(int_mmr_field_name) > 0)
+      const std::string int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
+      if (!int_mmr_field_name.empty())
         add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(int_mmr_field_name),grid_,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
     }
   }
@@ -256,8 +255,8 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
     wet_aero_.int_aero_nmr[m] = get_field_out(int_nmr_field_name).get_view<Real**>();
     dry_aero_.int_aero_nmr[m] = buffer_.dry_int_aero_nmr[m];
     for (int a = 0; a < mam_coupling::num_aero_species(); ++a) {
-      const char* int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
-      if (int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
+      const std::string int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
+      if (!int_mmr_field_name.empty()) {
         wet_aero_.int_aero_mmr[m][a] = get_field_out(int_mmr_field_name).get_view<Real**>();
         dry_aero_.int_aero_mmr[m][a] = buffer_.dry_int_aero_mmr[m][a];
       }

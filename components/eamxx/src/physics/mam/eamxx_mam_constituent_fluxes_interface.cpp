@@ -196,13 +196,13 @@ void MAMConstituentFluxes::initialize_impl(const RunType run_type) {
 
     for (int a = 0; a < mam_coupling::num_aero_species(); ++a) {
       // (interstitial) aerosol tracers of interest: mass (q) mixing ratios
-      const char* int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
-      if (int_mmr_field_name && strlen(int_mmr_field_name) > 0)
+      const std::string int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
+      if (!int_mmr_field_name.empty())
         add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(int_mmr_field_name),grid_,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
 
       // (cloudborne) aerosol tracers of interest: mass (q) mixing ratios
-      const char* cld_mmr_field_name = mam_coupling::cld_aero_mmr_field_name(m, a);
-      if (cld_mmr_field_name && strlen(cld_mmr_field_name) > 0)
+      const std::string cld_mmr_field_name = mam_coupling::cld_aero_mmr_field_name(m, a);
+      if (!cld_mmr_field_name.empty())
         add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(cld_mmr_field_name),grid_,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
     }
   }

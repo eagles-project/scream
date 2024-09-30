@@ -178,21 +178,21 @@ void MAMAci::set_grids(
 
     for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
       // (interstitial) aerosol tracers of interest: mass (q) mixing ratios
-      const char *int_mmr_field_name =
+      const std::string int_mmr_field_name =
           mam_coupling::int_aero_mmr_field_name(mode, a);
-      if(int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
+      if(!int_mmr_field_name.empty()) 
         add_field<Updated>(int_mmr_field_name, scalar3d_layout_mid, q_unit,
                            grid_name, "tracers");
-      }
+       
       // (cloudborne) aerosol tracers of interest: mass (q) mixing ratios
       // NOTE: DO NOT add cld borne aerosols to the "tracer" group as these are
       // NOT advected
-      const char *cld_mmr_field_name =
+      const std::string cld_mmr_field_name =
           mam_coupling::cld_aero_mmr_field_name(mode, a);
-      if(cld_mmr_field_name && strlen(cld_mmr_field_name) > 0) {
+      if(!cld_mmr_field_name.empty())  
         add_field<Updated>(cld_mmr_field_name, scalar3d_layout_mid, q_unit,
                            grid_name);
-      }
+       
     }  // end for loop num species
   }    // end for loop for num modes
 
@@ -305,13 +305,13 @@ void MAMAci::initialize_impl(const RunType run_type) {
 
     for (int a = 0; a < mam_coupling::num_aero_species(); ++a) {
       // (interstitial) aerosol tracers of interest: mass (q) mixing ratios
-      const char* int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
-      if (int_mmr_field_name && strlen(int_mmr_field_name) > 0)
+      const std::string int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
+      if (!int_mmr_field_name.empty())
         add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(int_mmr_field_name),grid_,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
 
       // (cloudborne) aerosol tracers of interest: mass (q) mixing ratios
-      const char *cld_mmr_field_name = mam_coupling::cld_aero_mmr_field_name(m, a);
-      if (cld_mmr_field_name && strlen(cld_mmr_field_name) > 0)
+      const std::string cld_mmr_field_name = mam_coupling::cld_aero_mmr_field_name(m, a);
+      if (!cld_mmr_field_name.empty())
         add_postcondition_check<FieldWithinIntervalCheck>(get_field_out(cld_mmr_field_name),grid_,mam4::physical_min("mmr"),mam4::physical_max("mmr"),false);
     }
   }
@@ -397,19 +397,19 @@ void MAMAci::initialize_impl(const RunType run_type) {
 
     for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
       // (interstitial) aerosol tracers of interest: mass (q) mixing ratios
-      const char *int_mmr_field_name =
+      const std::string int_mmr_field_name =
           mam_coupling::int_aero_mmr_field_name(m, a);
 
-      if(int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
+      if(!int_mmr_field_name.empty()) {
         wet_aero_.int_aero_mmr[m][a] =
             get_field_out(int_mmr_field_name).get_view<Real **>();
         dry_aero_.int_aero_mmr[m][a] = buffer_.dry_int_aero_mmr[m][a];
       }
 
       // (cloudborne) aerosol tracers of interest: mass (q) mixing ratios
-      const char *cld_mmr_field_name =
+      const std::string cld_mmr_field_name =
           mam_coupling::cld_aero_mmr_field_name(m, a);
-      if(cld_mmr_field_name && strlen(cld_mmr_field_name) > 0) {
+      if(!cld_mmr_field_name.empty()) {
         wet_aero_.cld_aero_mmr[m][a] =
             get_field_out(cld_mmr_field_name).get_view<Real **>();
         dry_aero_.cld_aero_mmr[m][a] = buffer_.dry_cld_aero_mmr[m][a];

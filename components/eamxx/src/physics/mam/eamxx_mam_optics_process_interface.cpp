@@ -88,11 +88,10 @@ void MAMOptics::set_grids(
 
     add_field<Updated>(int_nmr_field_name, scalar3d_mid, n_unit,grid_name, "tracers");
     for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
-      const char *int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
+      const std::string int_mmr_field_name = mam_coupling::int_aero_mmr_field_name(m, a);
 
-      if(int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
+      if(!int_mmr_field_name.empty())
         add_field<Updated>(int_mmr_field_name, scalar3d_mid, kg/kg,grid_name, "tracers");
-      }
     }
   }
   // (cloud) aerosol tracers of interest: mass (q) and number (n) mixing ratios
@@ -101,12 +100,11 @@ void MAMOptics::set_grids(
 
     add_field<Updated>(cld_nmr_field_name, scalar3d_mid, n_unit, grid_name);
     for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
-      const char *cld_mmr_field_name =
+      const std::string cld_mmr_field_name =
           mam_coupling::cld_aero_mmr_field_name(m, a);
 
-      if(cld_mmr_field_name && strlen(cld_mmr_field_name) > 0) {
+      if(!cld_mmr_field_name.empty())
         add_field<Updated>(cld_mmr_field_name, scalar3d_mid, kg/kg, grid_name);
-      }
     }
   }
 
@@ -175,9 +173,9 @@ void MAMOptics::initialize_impl(const RunType run_type) {
         get_field_out(int_nmr_field_name).get_view<Real **>();
     dry_aero_.int_aero_nmr[m] = buffer_.dry_int_aero_nmr[m];
     for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
-      const char *int_mmr_field_name =
+      const std::string int_mmr_field_name =
           mam_coupling::int_aero_mmr_field_name(m, a);
-      if(int_mmr_field_name && strlen(int_mmr_field_name) > 0) {
+      if(!int_mmr_field_name.empty()) {
         wet_aero_.int_aero_mmr[m][a] =
             get_field_out(int_mmr_field_name).get_view<Real **>();
         dry_aero_.int_aero_mmr[m][a] = buffer_.dry_int_aero_mmr[m][a];
@@ -192,9 +190,9 @@ void MAMOptics::initialize_impl(const RunType run_type) {
         get_field_out(cld_nmr_field_name).get_view<Real **>();
     dry_aero_.cld_aero_nmr[m] = buffer_.dry_cld_aero_nmr[m];
     for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
-      const char *cld_mmr_field_name =
+      const std::string cld_mmr_field_name =
           mam_coupling::cld_aero_mmr_field_name(m, a);
-      if(cld_mmr_field_name && strlen(cld_mmr_field_name) > 0) {
+      if(!cld_mmr_field_name.empty()) {
         wet_aero_.cld_aero_mmr[m][a] =
             get_field_out(cld_mmr_field_name).get_view<Real **>();
         dry_aero_.cld_aero_mmr[m][a] = buffer_.dry_cld_aero_mmr[m][a];
