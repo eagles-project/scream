@@ -2449,43 +2449,32 @@ void accumulate_column_tend_integrals(
     Real (&q_coltendaa)[gas_pcnst()][nqtendaa()],
     Real (&qqcw_coltendaa)[gas_pcnst()][nqqcwtendaa()]) {
 #if 0
-  use modal_aero_amicphys_control, only: wp=>r8, ncnst=>gas_pcnst
 
-  real(wp),intent(in) :: pdel       // layer thickness in pressure coordinate [Pa]
-  real(wp),intent(in) :: gravit     // gravitational acceleration [m/s^2]
+  // pdel: layer thickness in pressure coordinate [Pa]
+  // gravit: gravitational acceleration [m/s^2]
 
-  real(wp),intent(in)    ::    qgcm_tendaa(ncnst,   nqtendaa)
-  real(wp),intent(in)    :: qqcwgcm_tendaa(ncnst,nqqcwtendaa)
-
-  real(wp),intent(inout) ::    q_coltendaa(ncnst,   nqtendaa)
-  real(wp),intent(inout) :: qqcw_coltendaa(ncnst,nqqcwtendaa)
-
-  real(wp) :: pdel_fac   // = air density * dz
-
-  integer :: iqtend  // loop index corresponding to different aerosol processes
-  integer :: icnst   // loop index corresponding to different constituents (tracers)
-
-  pdel_fac = pdel/gravit
+  //FIXME: assert for gravit
+  const Real pdel_fac = pdel/gravit;
 
   // Gases and interstitial aerosols
 
-  do iqtend = 1,nqtendaa
-  do icnst = 1,ncnst
-     if ( do_q_coltendaa(icnst,iqtend) ) then
-        q_coltendaa(icnst,iqtend) = q_coltendaa(icnst,iqtend) + qgcm_tendaa(icnst,iqtend)*pdel_fac
-     end if
-  end do // icnst
-  end do // iqtend
+  for (int iqtend = 0; iqtend < nqtendaa(); ++iqtend){
+  for (int icnst = 0; icnst < gas_pcnst(); ++icnst){
+     if ( do_q_coltendaa[icns][iqtend] ) {
+        q_coltendaa[icnst][iqtend] += qgcm_tendaa[icnst][iqtend]*pdel_fac;
+     }
+  } // icnst
+  } // iqtend
 
   // cloud-borne aerosols
 
-  do iqtend = 1,nqqcwtendaa 
-  do icnst = 1,ncnst
-     if ( do_qqcw_coltendaa(icnst,iqtend) ) then
-        qqcw_coltendaa(icnst,iqtend) = qqcw_coltendaa(icnst,iqtend) + qqcwgcm_tendaa(icnst,iqtend)*pdel_fac
-     end if
-  end do // icnst
-  end do // iqtend
+  for (int iqtend = 0; iqtend < nqqcwtendaa(); ++iqtend){ 
+  for (int icnst = 0; icnst < gas_pcnst(); ++icnst){
+     if ( do_qqcw_coltendaa[icnst][iqtend] ) {
+        qqcw_coltendaa[icnst][iqtend] += qqcwgcm_tendaa[icnst][iqtend]*pdel_fac;
+     }
+  } // icnst
+  } // iqtend
 #endif
 }  // accumulate_column_tend_integrals
 
@@ -2810,93 +2799,18 @@ void modal_aero_amicphys_intr(
   }
 
 #if 0
+  //This code is for diagnostics only
+  // Get gravity
+  using C                      = physics::Constants<Real>;
+  static constexpr auto gravit = C::gravit;  // Gravity [m/s2]
 
-      accumulate_column_tend_integrals( pdel, gravit,                         // in
-                                             qgcm_tendaa,         qqcwgcm_tendaa,         // in
-                                             q_coltendaa(ii,:,:), qqcw_coltendaa(ii,:,:)  )// inout
+accumulate_column_tend_integrals( pdel, gravit,                         // in
+                                        qgcm_tendaa,         qqcwgcm_tendaa,         // in
+                                        q_coltendaa(ii,:,:), qqcw_coltendaa(ii,:,:)  )// inout
 
-      ncluster_3dtend_nnuc(ii,kk) = misc_vars_aa%ncluster_tend_nnuc_1grid
+ncluster_3dtend_nnuc(ii,kk) = misc_vars_aa%ncluster_tend_nnuc_1grid
 
 #endif
-
-  ///---OLD CODE BELOW!!!/////
-
-  //
-  // form new grid-mean mix-ratios
-
-  Real qaerwatgcm4[num_modes];
-  if(nsubarea == 1) {
-    for(int i = 0; i < gas_pcnst(); ++i) {
-      qgcm4[i] = qsub4[i][0];
-    }
-    for(int i = 0; i < gas_pcnst(); ++i)
-      for(int j = 0; j < nqtendaa(); ++j)
-        qgcm_tendaa[i][j] = qsub_tendaa[i][j][0];
-    for(int i = 0; i < num_modes; ++i) qaerwatgcm4[i] = qaerwatsub4[i][0];
-  } else {
-    for(int i = 0; i < gas_pcnst(); ++i) qgcm4[i] = 0.0;
-    for(int i = 0; i < gas_pcnst(); ++i)
-      for(int j = 0; j < nqtendaa(); ++j) qgcm_tendaa[i][j] = 0.0;
-    for(int n = 0; n <= nsubarea; ++n) {
-      for(int i = 0; i < gas_pcnst(); ++i) {
-        qgcm4[i] += qsub4[i][n] * afracsub[n];
-      }
-      for(int i = 0; i < gas_pcnst(); ++i)
-        for(int j = 0; j < nqtendaa(); ++j)
-          qgcm_tendaa[i][j] =
-              qgcm_tendaa[i][j] + qsub_tendaa[i][j][n] * afracsub[n];
-    }
-    for(int i = 0; i < num_modes; ++i)
-      // for aerosol water use the clear sub-area value
-      qaerwatgcm4[i] = qaerwatsub4[i][jclea - 1];
-  }
-
-  if(ncldy_subarea <= 0) {
-    for(int i = 0; i < gas_pcnst(); ++i) qqcwgcm4[i] = haero::max(0.0, qqcw[i]);
-    for(int i = 0; i < gas_pcnst(); ++i)
-      for(int j = 0; j < nqqcwtendaa(); ++j) qqcwgcm_tendaa[i][j] = 0.0;
-  } else if(nsubarea == 1) {
-    for(int i = 0; i < gas_pcnst(); ++i) qqcwgcm4[i] = qqcwsub4[i][0];
-    for(int i = 0; i < gas_pcnst(); ++i)
-      for(int j = 0; j < nqqcwtendaa(); ++j)
-        qqcwgcm_tendaa[i][j] = qqcwsub_tendaa[i][j][0];
-  } else {
-    for(int i = 0; i < gas_pcnst(); ++i) qqcwgcm4[i] = 0.0;
-    for(int i = 0; i < gas_pcnst(); ++i)
-      for(int j = 0; j < nqqcwtendaa(); ++j) qqcwgcm_tendaa[i][j] = 0.0;
-    for(int n = 0; n <= nsubarea; ++n) {
-      if(iscldy_subarea[n]) {
-        for(int i = 0; i < gas_pcnst(); ++i)
-          qqcwgcm4[i] += qqcwsub4[i][n] * afracsub[n];
-        for(int i = 0; i < gas_pcnst(); ++i)
-          for(int j = 0; j < nqqcwtendaa(); ++j)
-            qqcwgcm_tendaa[i][j] += qqcwsub_tendaa[i][j][n] * afracsub[n];
-      }
-    }
-  }
-
-  for(int lmz = 0; lmz < gas_pcnst(); ++lmz) {
-    if(lmapcc_all(lmz) > 0) {
-      // HW, to ensure non-negative
-      qq[lmz] = haero::max(qgcm4[lmz], 0.0);
-      if(lmapcc_all(lmz) >= lmapcc_val_aer()) {
-        // HW, to ensure non-negative
-        qqcw[lmz] = haero::max(qqcwgcm4[lmz], 0.0);
-      }
-    }
-  }
-  for(int i = 0; i < gas_pcnst(); ++i) {
-    if(iqtend_cond() < nqtendbb())
-      q_tendbb[i][iqtend_cond()] = qgcm_tendaa[i][iqtend_cond()];
-    if(iqtend_rnam() < nqtendbb())
-      q_tendbb[i][iqtend_rnam()] = qgcm_tendaa[i][iqtend_rnam()];
-    if(iqtend_nnuc() < nqtendbb())
-      q_tendbb[i][iqtend_nnuc()] = qgcm_tendaa[i][iqtend_nnuc()];
-    if(iqtend_coag() < nqtendbb())
-      q_tendbb[i][iqtend_coag()] = qgcm_tendaa[i][iqtend_coag()];
-    if(iqqcwtend_rnam() < nqqcwtendbb())
-      qqcw_tendbb[i][iqqcwtend_rnam()] = qqcwgcm_tendaa[i][iqqcwtend_rnam()];
-  }
 }  // modal_aero_amicphys_intr
 
 }  // namespace scream::impl
