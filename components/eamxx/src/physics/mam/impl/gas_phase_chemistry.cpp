@@ -488,14 +488,14 @@ void gas_phase_chemistry(int k, Real phis, Real temp, Real pmid, Real dt,  // in
                               inv_h2o_ndx);                          // in
   // for(int i = 0; i < rxntot; ++i) {
   // if(reaction_rates[i] > 1e-30)
-  // printf("React rates-usr:%0.15e,%i\n", reaction_rates[i], i);
+  // printf("React rates-usr:   %0.15E, %i\n", reaction_rates[i], i);
   //}
 
   mam4::gas_chemistry::adjrxt(reaction_rates,                   // out
                               invariants, invariants[indexm]);  // in
   for(int i = 0; i < rxntot; ++i) {
     if(reaction_rates[i] > 1e-30) {
-      // printf("React rates-adj:%0.15e,%i\n", reaction_rates[i], i);
+      // printf("React rates-adj:   %0.15E, %i\n", reaction_rates[i], i);
     }
   }
 
@@ -582,7 +582,7 @@ void gas_phase_chemistry(int k, Real phis, Real temp, Real pmid, Real dt,  // in
     extfrc_rates[i] = extfrc_rates_hardwired[i];
   }
   // for(int i = 0; i < 3; ++i) {
-  //   printf("q-before_imp:%0.15e,%i\n", q[i], i);
+  //   printf("q-before_imp:   %0.15E, %i\n", q[i], i);
   // }
   // Mixing ratios before chemistry changes
   for(int i = 0; i < gas_pcnst; ++i) {
@@ -595,7 +595,7 @@ void gas_phase_chemistry(int k, Real phis, Real temp, Real pmid, Real dt,  // in
                                prod_out, loss_out);                      // out
   if(k == 48) {
     for(int i = 0; i < 3; ++i) {
-      printf("q-aft_imp:%0.15e,%i\n", q[i], i);
+      printf("q-aft_imp:   %0.15E, %i\n", q[i], i + 1);
     }
   }
   // printf("\n");
@@ -604,7 +604,7 @@ void gas_phase_chemistry(int k, Real phis, Real temp, Real pmid, Real dt,  // in
   if(ndx_h2so4 > 0) {
     del_h2so4_gasprod = q[ndx_h2so4] - del_h2so4_gasprod;
   }
-  // printf("del_h2so4_gasprod:%0.15e\n", del_h2so4_gasprod);
+  // printf("del_h2so4_gasprod:   %0.15E\n", del_h2so4_gasprod);
 }
 
 }  // namespace scream::impl

@@ -1028,7 +1028,7 @@ void MAMMicrophysics::run_impl(const double dt) {
 
               for(int i = offset_aerosol; i < pcnst; ++i) {
                 q[i - offset_aerosol] = state_q[i];
-                // printf("BALLI:-loop-aa:, %.15e,%i\n",
+                // printf("BALLI:-loop-aa:, %.15e %i\n",
                 // q[i-offset_aerosol],i - offset_aerosol);
                 qqcw[i - offset_aerosol] = qqcw_long[i];
               }
@@ -1052,7 +1052,8 @@ void MAMMicrophysics::run_impl(const double dt) {
 
               if(k == 48) {
                 for(int i = 0; i < gas_pcnst; ++i) {
-                  printf("vmr-q-adv:, %0.15E,%.15e,%i\n", vmr[i], q[i], i + 1);
+                  printf("vmr-q-adv:   %0.15E,   %.15E, %i\n", vmr[i], q[i],
+                         i + 1);
                 }
               }
 
@@ -1119,8 +1120,8 @@ void MAMMicrophysics::run_impl(const double dt) {
               constexpr int indexm  = mam4::gas_chemistry::indexm;
               if(k == 48) {
                 for(int i = 0; i < gas_pcnst; ++i) {
-                  printf("vmrcw, vmr BEF setsox:%0.15E,%0.15E,%i\n", vmrcw[i],
-                         vmr[i], i + 1);
+                  printf("vmrcw,vmr-BEF-setsox:  %0.15E,  %0.15E, %i\n",
+                         vmrcw[i], vmr[i], i + 1);
                 }
               }
               mam4::mo_setsox::setsox_single_level(
@@ -1130,8 +1131,8 @@ void MAMMicrophysics::run_impl(const double dt) {
                   vmrcw, vmr);                                           // out
               if(k == 48) {
                 for(int i = 0; i < gas_pcnst; ++i) {
-                  printf("vmrcw, vmr aft setsox:%0.15E,%0.15E,%i\n", vmrcw[i],
-                         vmr[i], i + 1);
+                  printf("vmrcw, vmr aft setsox:   %0.15E,   %0.15E, %i\n",
+                         vmrcw[i], vmr[i], i + 1);
                 }
               }
 
@@ -1155,11 +1156,11 @@ void MAMMicrophysics::run_impl(const double dt) {
               // do aerosol microphysics (gas-aerosol exchange, nucleation,
               // coagulation)
               if(k == 48) {
-                printf("others:%0.15E,%0.15E,%0.15E\n", pblh, qv, cldfrac);
+                //("others:   %0.15E,   %0.15E,   %0.15E\n", pblh, qv, cldfrac);
                 for(int im = 0; im < 4; im++) {
-                  printf("dgnum:%0.15E,%i\n", dgncur_a_kk[im], im);
-                  printf("dgnumwet:%0.15E\n", dgncur_awet_kk[im]);
-                  printf("wetdens:%0.15E\n", wetdens_kk[im]);
+                  // printf("dgnum:   %0.15E, %i\n", dgncur_a_kk[im], im);
+                  // printf("dgnumwet:   %0.15E\n", dgncur_awet_kk[im]);
+                  // printf("wetdens:   %0.15E\n", wetdens_kk[im]);
                 }
               }
 
@@ -1174,8 +1175,8 @@ void MAMMicrophysics::run_impl(const double dt) {
 
               if(k == 48) {
                 for(int i = 10; i < 13; ++i) {
-                  printf("vmrcw, vmr aft amicphys:%0.15E,%0.15E,%i\n", vmrcw[i],
-                         vmr[i], i);
+                  printf("vmrcw, vmr aft amicphys:   %0.15E,   %0.15E, %i\n",
+                         vmrcw[i], vmr[i], i);
                 }
               }
 
