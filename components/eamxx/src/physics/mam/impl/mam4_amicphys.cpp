@@ -986,12 +986,12 @@ void mam_newnuc_1subarea(
   //   call ... routine to get nucleation rates
   // FIXME: I GOT ALL ZEROS...THIS IS NOT VALIDATED YET!!!!
   mam4::nucleation::mer07_veh02_nuc_mosaic_1box(
-      kk, newnuc_method_flagaa, deltat, temp, relhumnn, pmid, zmid, pblh,  // in
-      qh2so4_cur, qh2so4_avg, qnh3_cur, tmp_uptkrate, mw_so4a_host, 1,     // in
-      dplom_mode, dphim_mode, rgas, avogadro, mwnh4, mwso4,                // in
-      haero::Constants::pi,                                                // in
-      itmp, qnuma_del, qso4a_del, qnh4a_del, qh2so4_del,  // out
-      qnh3_del, dens_nh4so4a, dnclusterdt);               // out
+      newnuc_method_flagaa, deltat, temp, relhumnn, pmid, zmid, pblh,   // in
+      qh2so4_cur, qh2so4_avg, qnh3_cur, tmp_uptkrate, mw_so4a_host, 1,  // in
+      dplom_mode, dphim_mode, rgas, avogadro, mwnh4, mwso4,             // in
+      haero::Constants::pi,                                             // in
+      itmp, qnuma_del, qso4a_del, qnh4a_del, qh2so4_del,                // out
+      qnh3_del, dens_nh4so4a, dnclusterdt);                             // out
 
   if(kk == 48) {
     printf(
@@ -1440,7 +1440,6 @@ void mam_amicphys_1subarea(
       Real uptkaer[max_gas()][max_mode];
 
       mam4::mam_gasaerexch_1subarea(
-          kk,                                                // FIXME: remove kk
           jtsubstep, dtsubstep, temp, pmid, aircon, nmodes,  // in
           qgas_cur, qgas_avg,                                // inout
           qgas_netprod_otrproc,                              // in
@@ -1664,14 +1663,14 @@ void mam_amicphys_1subarea(
       }
       Rename rename;
       rename.mam_rename_1subarea_(
-          kk, iscldy_subarea, smallest_dryvol_value, dest_mode_of_mode,  // in
-          mean_std_dev, fmode_dist_tail_fac, v2n_lo_rlx, v2n_hi_rlx,     // in
-          ln_diameter_tail_fac, num_pairs, diameter_cutoff,              // in
-          ln_dia_cutoff, diameter_threshold, mass_2_vol, dgnum_amode,    // in
-          qnum_cur, qaer_cur_tmp,                                        // out
-          qaer_delsub_grow4rnam_tmp,                                     // in
-          qnumcw_cur, qaercw_cur_tmp,                                    // out
-          qaercw_delsub_grow4rnam_tmp);                                  // in
+          iscldy_subarea, smallest_dryvol_value, dest_mode_of_mode,    // in
+          mean_std_dev, fmode_dist_tail_fac, v2n_lo_rlx, v2n_hi_rlx,   // in
+          ln_diameter_tail_fac, num_pairs, diameter_cutoff,            // in
+          ln_dia_cutoff, diameter_threshold, mass_2_vol, dgnum_amode,  // in
+          qnum_cur, qaer_cur_tmp,                                      // out
+          qaer_delsub_grow4rnam_tmp,                                   // in
+          qnumcw_cur, qaercw_cur_tmp,                                  // out
+          qaercw_delsub_grow4rnam_tmp);                                // in
 
       // copy the output back to the variables
       for(int is = 0; is < nspecies; ++is) {
@@ -1902,7 +1901,6 @@ void mam_amicphys_1subarea(
 
     if(do_aging_in_subarea) {
       mam4::aging::mam_pcarbon_aging_1subarea(
-          kk,
           dgn_a,                                         // input
           qnum_cur, qnum_delsub_cond, qnum_delsub_coag,  // in-outs
           qaer_cur, qaer_delsub_cond, qaer_delsub_coag,  // in-outs

@@ -1125,8 +1125,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                 }
               }
               mam4::mo_setsox::setsox_single_level(
-                  k,                                         // FIXME: remove k
-                  loffset, dt, pmid, pdel, temp, mbar, lwc,  // in
+                  loffset, dt, pmid, pdel, temp, mbar, lwc,              // in
                   cldfrac, cldnum, invariants_k[indexm], config.setsox,  // in
                   vmrcw, vmr);                                           // out
               if(k == 48) {
