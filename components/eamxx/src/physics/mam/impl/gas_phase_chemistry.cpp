@@ -60,26 +60,24 @@ void populate_etfphot(HostView1D we, HostView1D etfphot) {
   Kokkos::deep_copy(etfphot, 0);
 }
 
-std::vector<Real> populate_etfphot_from_e3sm_case()
-{
+std::vector<Real> populate_etfphot_from_e3sm_case() {
   // We obtained these values from an e3sm simulations.
   // We should only use this function on Host.
   std::vector<Real> etfphot_data = {
-    7.5691227E+11, 8.6525905E+11, 1.0355749E+12, 1.1846288E+12, 2.1524405E+12,
-    3.2362584E+12, 3.7289849E+12, 4.4204330E+12, 4.6835350E+12, 6.1217728E+12,
-    4.5575051E+12, 5.3491446E+12, 4.7016063E+12, 5.4281722E+12, 4.5023968E+12,
-    6.8931981E+12, 6.2012647E+12, 6.1430771E+12, 5.7820385E+12, 7.6770646E+12,
-    1.3966509E+13, 1.2105348E+13, 2.8588980E+13, 3.2160821E+13, 2.4978066E+13,
-    2.7825401E+13, 2.3276451E+13, 3.6343684E+13, 6.1787886E+13, 7.8009914E+13,
-    7.6440824E+13, 7.6291458E+13, 9.4645085E+13, 1.0124628E+14, 1.0354111E+14,
-    1.0999650E+14, 1.0889946E+14, 1.1381912E+14, 1.3490042E+14, 1.5941519E+14,
-    1.4983265E+14, 1.5184267E+14, 1.5991420E+14, 1.6976697E+14, 1.8771840E+14,
-    1.6434367E+14, 1.8371960E+14, 2.1966369E+14, 1.9617879E+14, 2.2399700E+14,
-    1.8429912E+14, 2.0129736E+14, 2.0541588E+14, 2.4334962E+14, 3.5077122E+14,
-    3.4517894E+14, 3.5749668E+14, 3.6624304E+14, 3.4975113E+14, 3.5566025E+14,
-    4.2825273E+14, 4.8406375E+14, 4.9511159E+14, 5.2695368E+14, 5.2401611E+14,
-    5.0877746E+14, 4.8780853E+14
-  };
+      7.5691227E+11, 8.6525905E+11, 1.0355749E+12, 1.1846288E+12, 2.1524405E+12,
+      3.2362584E+12, 3.7289849E+12, 4.4204330E+12, 4.6835350E+12, 6.1217728E+12,
+      4.5575051E+12, 5.3491446E+12, 4.7016063E+12, 5.4281722E+12, 4.5023968E+12,
+      6.8931981E+12, 6.2012647E+12, 6.1430771E+12, 5.7820385E+12, 7.6770646E+12,
+      1.3966509E+13, 1.2105348E+13, 2.8588980E+13, 3.2160821E+13, 2.4978066E+13,
+      2.7825401E+13, 2.3276451E+13, 3.6343684E+13, 6.1787886E+13, 7.8009914E+13,
+      7.6440824E+13, 7.6291458E+13, 9.4645085E+13, 1.0124628E+14, 1.0354111E+14,
+      1.0999650E+14, 1.0889946E+14, 1.1381912E+14, 1.3490042E+14, 1.5941519E+14,
+      1.4983265E+14, 1.5184267E+14, 1.5991420E+14, 1.6976697E+14, 1.8771840E+14,
+      1.6434367E+14, 1.8371960E+14, 2.1966369E+14, 1.9617879E+14, 2.2399700E+14,
+      1.8429912E+14, 2.0129736E+14, 2.0541588E+14, 2.4334962E+14, 3.5077122E+14,
+      3.4517894E+14, 3.5749668E+14, 3.6624304E+14, 3.4975113E+14, 3.5566025E+14,
+      4.2825273E+14, 4.8406375E+14, 4.9511159E+14, 5.2695368E+14, 5.2401611E+14,
+      5.0877746E+14, 4.8780853E+14};
   return etfphot_data;
 }
 
@@ -120,7 +118,7 @@ mam4::mo_photo::PhotoTableData read_photo_table(
   auto colo3_h   = Kokkos::create_mirror_view(table.colo3);
   auto o3rat_h   = Kokkos::create_mirror_view(table.o3rat);
   // auto etfphot_h = Kokkos::create_mirror_view(table.etfphot);
-  auto prs_h     = Kokkos::create_mirror_view(table.prs);
+  auto prs_h = Kokkos::create_mirror_view(table.prs);
 
   // read file data into our host views
   scorpio::read_var(rsf_file, "pm", press_h.data());
@@ -151,7 +149,7 @@ mam4::mo_photo::PhotoTableData read_photo_table(
   // populate_etfphot(we_h, etfphot_h);
   // FIXME: etfphot_data is hard-coded.
   auto etfphot_data = populate_etfphot_from_e3sm_case();
-  auto etfphot_h = HostView1D((Real *)etfphot_data.data(),nw);
+  auto etfphot_h    = HostView1D((Real *)etfphot_data.data(), nw);
 
   scorpio::release_file(rsf_file);
   scorpio::release_file(xs_long_file);
@@ -199,12 +197,12 @@ mam4::mo_photo::PhotoTableData read_photo_table(
 KOKKOS_INLINE_FUNCTION
 void gas_phase_chemistry(
     Real zm, Real zi, Real phis, Real temp, Real pmid, Real pdel, Real dt,
-    const Real photo_rates[mam4::mo_photo::phtcnt],  // in
-    const Real extfrc[mam4::gas_chemistry::extcnt],  // in
-    Real invariants[mam4::gas_chemistry::nfs],       // in
-    const int clsmap_4[mam4::gas_chemistry::gas_pcnst], // in
-    const int permute_4[mam4::gas_chemistry::gas_pcnst],// in
-    Real q[mam4::gas_chemistry::gas_pcnst]) {        // VMRs, inout
+    const Real photo_rates[mam4::mo_photo::phtcnt],       // in
+    const Real extfrc[mam4::gas_chemistry::extcnt],       // in
+    Real invariants[mam4::gas_chemistry::nfs],            // in
+    const int clsmap_4[mam4::gas_chemistry::gas_pcnst],   // in
+    const int permute_4[mam4::gas_chemistry::gas_pcnst],  // in
+    Real q[mam4::gas_chemistry::gas_pcnst]) {             // VMRs, inout
   // constexpr Real rga = 1.0/haero::Constants::gravity;
   // constexpr Real m2km = 0.01; // converts m -> km
 
@@ -267,15 +265,15 @@ void gas_phase_chemistry(
   //===================================
 
   // compute the rate of change from forcing
-  Real extfrc_rates[extcnt]; // [1/cm^3/s]
-  for (int mm = 0; mm < extcnt; ++mm) {
-    if (mm != synoz_ndx) {
+  Real extfrc_rates[extcnt];  // [1/cm^3/s]
+  for(int mm = 0; mm < extcnt; ++mm) {
+    if(mm != synoz_ndx) {
       extfrc_rates[mm] = extfrc[mm] / invariants[indexm];
     }
   }
 
   // ... Form the washout rates
-  Real het_rates[gas_pcnst]={0};
+  Real het_rates[gas_pcnst] = {0};
   // FIXME: not ported yet
   // sethet(het_rates, pmid, zmid, phis, temp, cmfdqr, prain, nevapr, delt,
   //       invariants[indexm], q);
@@ -305,8 +303,9 @@ void gas_phase_chemistry(
 
   // solve chemical system implicitly
   Real prod_out[clscnt4], loss_out[clscnt4];
-  mam4::gas_chemistry::imp_sol(q, reaction_rates, het_rates, extfrc_rates, dt, permute_4,
-                               clsmap_4, factor, epsilon, prod_out, loss_out);
+  mam4::gas_chemistry::imp_sol(q, reaction_rates, het_rates, extfrc_rates, dt,
+                               permute_4, clsmap_4, factor, epsilon, prod_out,
+                               loss_out);
 
   // save h2so4 change by gas phase chem (for later new particle nucleation)
   if(ndx_h2so4 > 0) {
