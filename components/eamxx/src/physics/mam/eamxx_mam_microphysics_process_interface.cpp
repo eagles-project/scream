@@ -154,7 +154,7 @@ void MAMMicrophysics::set_grids(
   add_field<Required>("wetdens", scalar3d_mid_nmodes, kg / m3, grid_name);
 
   // Aerosol water [kg/kg]
-  add_field<Required>("qaerwat", scalar3d_mid_nmodes, kg / kg, grid_name);
+  // add_field<Required>("qaerwat", scalar3d_mid_nmodes, kg / kg, grid_name);
 
   // Wet Required diameter [m]
   add_field<Required>("dgnumwet", scalar3d_mid_nmodes, m, grid_name);
@@ -666,7 +666,7 @@ void MAMMicrophysics::run_impl(const double dt) {
       get_field_in("dgnumwet").get_view<const Real ***>();
   const auto dry_geometric_mean_diameter_i =
       get_field_in("dgncur_a").get_view<const Real ***>();
-  const auto qaerwat = get_field_in("qaerwat").get_view<const Real ***>();
+  // const auto qaerwat = get_field_in("qaerwat").get_view<const Real ***>();
   const auto wetdens = get_field_in("wetdens").get_view<const Real ***>();
 
   // climatology data for linear stratospheric chemistry
@@ -710,37 +710,30 @@ void MAMMicrophysics::run_impl(const double dt) {
 #if 0  
   scream::mam_coupling::advance_tracer_data(
       TracerDataReader_, *TracerHorizInterp_, ts, trace_time_state_,
-      tracer_data_,
-      dry_atm_.p_mid, dry_atm_.z_iface, cnst_offline_);
+      tracer_data_, dry_atm_.p_mid, dry_atm_.z_iface, cnst_offline_);
   Kokkos::fence();
 
 #if defined(ENABLE_OUTPUT_TRACER_FIELDS)
-  const auto oxi_fields_outputs = get_field_out("oxi_fields").get_view<Real ***>();
-  for (int ifield = 0; ifield < int(oxi_fields_outputs.extent(1)); ++ifield)
-  {
-    const auto field_at_i = Kokkos::subview(oxi_fields_outputs,
-                                            Kokkos::ALL(),
-                                            ifield,
-                                            Kokkos::ALL());
+  const auto oxi_fields_outputs =
+      get_field_out("oxi_fields").get_view<Real ***>();
+  for(int ifield = 0; ifield < int(oxi_fields_outputs.extent(1)); ++ifield) {
+    const auto field_at_i = Kokkos::subview(oxi_fields_outputs, Kokkos::ALL(),
+                                            ifield, Kokkos::ALL());
     Kokkos::deep_copy(field_at_i, cnst_offline_[ifield]);
   }
 #endif
 
-
   scream::mam_coupling::advance_tracer_data(
-      LinozDataReader_, *LinozHorizInterp_, ts, linoz_time_state_,
-      linoz_data_,
+      LinozDataReader_, *LinozHorizInterp_, ts, linoz_time_state_, linoz_data_,
       dry_atm_.p_mid, dry_atm_.z_iface, linoz_output);
   Kokkos::fence();
 
 #if defined(ENABLE_OUTPUT_TRACER_FIELDS)
-  const auto linoz_fields_outputs = get_field_out("linoz_fields").get_view<Real ***>();
-  for (int ifield = 0; ifield < int(linoz_fields_outputs.extent(1)); ++ifield)
-  {
-    const auto field_at_i = Kokkos::subview(linoz_fields_outputs,
-                                            Kokkos::ALL(),
-                                            ifield,
-                                            Kokkos::ALL());
+  const auto linoz_fields_outputs =
+      get_field_out("linoz_fields").get_view<Real ***>();
+  for(int ifield = 0; ifield < int(linoz_fields_outputs.extent(1)); ++ifield) {
+    const auto field_at_i = Kokkos::subview(linoz_fields_outputs, Kokkos::ALL(),
+                                            ifield, Kokkos::ALL());
     Kokkos::deep_copy(field_at_i, linoz_output[ifield]);
   }
 #endif
@@ -753,26 +746,23 @@ void MAMMicrophysics::run_impl(const double dt) {
     const auto var_names = vert_emis_var_names_[var_name];
     const int nsectors = int(var_names.size());
     view_2d vert_emis_output[nsectors];
-    for (int isp = 0; isp < nsectors; ++isp)
-    {
+    for(int isp = 0; isp < nsectors; ++isp) {
       vert_emis_output[isp]= vert_emis_output_[isp+forcings_[i].offset];
     }
     scream::mam_coupling::advance_tracer_data(
         VertEmissionsDataReader_[i], *VertEmissionsHorizInterp_[i], ts,
-        vert_emiss_time_state_,
-        vert_emis_data_[i], dry_atm_.p_mid,
+        vert_emiss_time_state_, vert_emis_data_[i], dry_atm_.p_mid,
         dry_atm_.z_iface, vert_emis_output);
     Kokkos::fence();
   }
 
 #if defined(ENABLE_OUTPUT_TRACER_FIELDS)
-  const auto ver_emiss_fields_outputs = get_field_out("vertical_emission_fields").get_view<Real ***>();
-  for (int ifield = 0; ifield < int(ver_emiss_fields_outputs.extent(1)); ++ifield)
-  {
-    const auto field_at_i = Kokkos::subview(ver_emiss_fields_outputs,
-                                            Kokkos::ALL(),
-                                            ifield,
-                                            Kokkos::ALL());
+  const auto ver_emiss_fields_outputs =
+      get_field_out("vertical_emission_fields").get_view<Real ***>();
+  for(int ifield = 0; ifield < int(ver_emiss_fields_outputs.extent(1));
+      ++ifield) {
+    const auto field_at_i = Kokkos::subview(
+        ver_emiss_fields_outputs, Kokkos::ALL(), ifield, Kokkos::ALL());
     Kokkos::deep_copy(field_at_i, vert_emis_output_[ifield]);
   }
 #endif
@@ -859,7 +849,6 @@ void MAMMicrophysics::run_impl(const double dt) {
   constexpr int extcnt        = mam4::gas_chemistry::extcnt;
 
   const int offset_aerosol = mam4::utils::gasses_start_ind();
-  printf("offset_aerosol:%i\n", offset_aerosol);
   Real adv_mass_kg_per_moles[gas_pcnst];
   // NOTE: Making copies of clsmap_4 and permute_4 to fix undefined arrays on
   // the device.
@@ -895,7 +884,7 @@ void MAMMicrophysics::run_impl(const double dt) {
             ekat::subview(wet_geometric_mean_diameter_i, icol);
         auto dry_diameter_icol =
             ekat::subview(dry_geometric_mean_diameter_i, icol);
-        auto qaerwat_icol = ekat::subview(qaerwat, icol);
+        // auto qaerwat_icol = ekat::subview(qaerwat, icol);
         auto wetdens_icol = ekat::subview(wetdens, icol);
 
         // fetch column-specific subviews into aerosol prognostics
@@ -1007,26 +996,13 @@ void MAMMicrophysics::run_impl(const double dt) {
                 }
               }
 
-              // aerosol/gas species tendencies (output)
-              Real vmr_tendbb[gas_pcnst][nqtendbb]   = {};
-              Real vmrcw_tendbb[gas_pcnst][nqtendbb] = {};
-
-              // create work array copies to retain "pre-chemistry" values
-              Real vmr_pregaschem[gas_pcnst]   = {};
-              Real vmr_precldchem[gas_pcnst]   = {};
-              Real vmrcw_precldchem[gas_pcnst] = {};
-              for(int i = 0; i < gas_pcnst; ++i) {
-                vmr_pregaschem[i]   = vmr[i];
-                vmr_precldchem[i]   = vmr[i];
-                vmrcw_precldchem[i] = vmrcw[i];
-              }
-
               //---------------------
               // Gas Phase Chemistry
               //---------------------
               //
               const auto &extfrc_k     = ekat::subview(extfrc_icol, kk);
               const auto &invariants_k = ekat::subview(invariants_icol, kk);
+
               // FIXME: remove this
               const Real invariants_hardwired[mam4::gas_chemistry::nfs] = {
                   1.611671144804186E+019, 1.273220204395307E+019,
@@ -1057,13 +1033,26 @@ void MAMMicrophysics::run_impl(const double dt) {
               // subroutine in eam/src/chemistry/modal_aero/aero_model.F90
 
               // aqueous chemistry ...
-              // offset of first tracer in work arrays
-              constexpr int loffset = 8;
-              const Real mbar       = haero::Constants::molec_weight_dry_air;
-              constexpr int indexm  = mam4::gas_chemistry::indexm;
+              const Real mbar      = haero::Constants::molec_weight_dry_air;
+              constexpr int indexm = mam4::gas_chemistry::indexm;
+              if(kk == 48) {
+                for(int i = 0; i < gas_pcnst; ++i) {
+                  printf("vmrcw,vmr-BEF-setsox:  %0.15E,  %0.15E, %i\n",
+                         vmrcw[i], vmr[i], i + 1);
+                }
+              }
               mam4::mo_setsox::setsox_single_level(
-                  loffset, dt, pmid, pdel, temp, mbar, lwc, cldfrac, cldnum,
-                  invariants_k[indexm], config.setsox, vmrcw, vmr);
+                  // in
+                  offset_aerosol, dt, pmid, pdel, temp, mbar, lwc, cldfrac,
+                  cldnum, invariants_k[indexm], config.setsox,
+                  // out
+                  vmrcw, vmr);
+              if(kk == 48) {
+                for(int i = 0; i < gas_pcnst; ++i) {
+                  printf("vmrcw, vmr aft setsox:   %0.15E,   %0.15E, %i\n",
+                         vmrcw[i], vmr[i], i + 1);
+                }
+              }
 
               // calculate aerosol water content using water uptake treatment
               // * dry and wet diameters [m]
@@ -1077,8 +1066,22 @@ void MAMMicrophysics::run_impl(const double dt) {
               for(int imode = 0; imode < num_modes; imode++) {
                 dgncur_awet_kk[imode] = wet_diameter_icol(imode, kk);
                 dgncur_a_kk[imode]    = dry_diameter_icol(imode, kk);
-                qaerwat_kk[imode]     = qaerwat_icol(imode, kk);
-                wetdens_kk[imode]     = wetdens_icol(imode, kk);
+                // qaerwat_kk[imode]     = qaerwat_icol(imode, kk);
+                wetdens_kk[imode] = wetdens_icol(imode, kk);
+              }
+
+              // aerosol/gas species tendencies (output)
+              Real vmr_tendbb[gas_pcnst][nqtendbb]   = {};
+              Real vmrcw_tendbb[gas_pcnst][nqtendbb] = {};
+
+              // create work array copies to retain "pre-chemistry" values
+              Real vmr_pregaschem[gas_pcnst]   = {};
+              Real vmr_precldchem[gas_pcnst]   = {};
+              Real vmrcw_precldchem[gas_pcnst] = {};
+              for(int i = 0; i < gas_pcnst; ++i) {
+                vmr_pregaschem[i]   = vmr[i];
+                vmr_precldchem[i]   = vmr[i];
+                vmrcw_precldchem[i] = vmrcw[i];
               }
               // do aerosol microphysics (gas-aerosol exchange, nucleation,
               // coagulation)
@@ -1086,7 +1089,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                   config.amicphys, step, dt, temp, pmid, pdel, zm, pblh, qv,
                   cldfrac, vmr, vmrcw, vmr_pregaschem, vmr_precldchem,
                   vmrcw_precldchem, vmr_tendbb, vmrcw_tendbb, dgncur_a_kk,
-                  dgncur_awet_kk, wetdens_kk, qaerwat_kk);
+                  dgncur_awet_kk, wetdens_kk);  //, qaerwat_kk);
               //-----------------
               // LINOZ chemistry
               //-----------------
@@ -1098,14 +1101,15 @@ void MAMMicrophysics::run_impl(const double dt) {
 
               int o3_ndx = 0;  // index of "O3" in solsym array (in EAM)
 #if 0
-      mam4::lin_strat_chem::lin_strat_chem_solve_kk(o3_col_dens_i(kk), temp,
-        zenith_angle(icol), pmid, dt, rlats,
-        linoz_o3_clim(icol, kk), linoz_t_clim(icol, kk), linoz_o3col_clim(icol, kk),
-        linoz_PmL_clim(icol, kk), linoz_dPmL_dO3(icol, kk), linoz_dPmL_dT(icol, kk),
+              mam4::lin_strat_chem::lin_strat_chem_solve_kk(
+                  o3_col_dens_i(kk), temp, zenith_angle(icol), pmid, dt, rlats,
+                  linoz_o3_clim(icol, kk), linoz_t_clim(icol, kk),
+                  linoz_o3col_clim(icol, kk), linoz_PmL_clim(icol, kk),
+                  linoz_dPmL_dO3(icol, kk), linoz_dPmL_dT(icol, kk),
         linoz_dPmL_dO3col(icol, kk), linoz_cariolle_pscs(icol, kk),
-        chlorine_loading, config.linoz.psc_T, vmr[o3_ndx],
-        do3_linoz, do3_linoz_psc, ss_o3,
-        o3col_du_diag, o3clim_linoz_diag, zenith_angle_degrees);
+                  chlorine_loading, config.linoz.psc_T, vmr[o3_ndx], do3_linoz,
+                  do3_linoz_psc, ss_o3, o3col_du_diag, o3clim_linoz_diag,
+                  zenith_angle_degrees);
 
               // update source terms above the ozone decay threshold
               /*if (kk > nlev - config.linoz.o3_lbl - 1) {
@@ -1131,11 +1135,10 @@ void MAMMicrophysics::run_impl(const double dt) {
 
               for (int i = offset_aerosol; i < pcnst; ++i) {
                 state_q[i] = qq[i-offset_aerosol];
-                qqcw_long[i] = qqcw[i-offset_aerosol];
+                qqcw_pcnst[i] = qqcw[i - offset_aerosol];
               }
               mam4::utils::inject_stateq_to_prognostics(state_q, progs, kk);
-              mam4::utils::inject_qqcw_to_prognostics(qqcw_long, progs, kk);
-
+              mam4::utils::inject_qqcw_to_prognostics(qqcw_pcnst, progs, kk);
 #endif
             });  // parallel_for for vertical levels
       });        // parallel_for for the column loop
