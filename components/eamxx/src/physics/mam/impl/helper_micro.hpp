@@ -226,6 +226,13 @@ void vert_interp(int ncol, int levsiz, int pver, const view_2d &pin,
       } else {
         Real dpu = pmid(i, k) - pin(i, kupper(i));
         Real dpl = pin(i, kupper(i) + 1) - pmid(i, k);
+        if(dpu == -dpl) {
+          printf("BALLI:%e,%e,%e,%e,%e,%i,%i,%i\n", dpu, dpl, pmid(i, k),
+                 pin(i, kupper(i)), pin(i, kupper(i) + 1), i, k, kupper(i));
+        }
+        EKAT_KERNEL_ASSERT_MSG(
+            (dpl + dpu) != 0,
+            "Error! denominator (dpl + dpu) must be non-zero!\n");
         dataout(i, k) =
             (datain(i, kupper(i)) * dpl + datain(i, kupper(i) + 1) * dpu) /
             (dpl + dpu);
@@ -708,6 +715,12 @@ void rebin(int nsrc, int ntrg, const const_view_1d &src_x, const Real trg_x[],
         Real su = haero::min(tu, src_x(si));
         y += (su - sl) * src(si1);
       }
+      if(trg_x[i + 1] == trg_x[i]) {
+        printf("BALLI-trg:%e,%e,%i\n", trg_x[i + 1], trg_x[i], i);
+      }
+      EKAT_KERNEL_ASSERT_MSG(
+          (trg_x[i + 1] - trg_x[i]) != 0,
+          "Error! denominator (trg_x[i + 1] - trg_x[i]) must be non-zero!\n");
       trg(i) = y / (trg_x[i + 1] - trg_x[i]);
     } else {
       trg(i) = 0.0;

@@ -1026,6 +1026,14 @@ void MAMMicrophysics::run_impl(const double dt) {
                                         // out
                                         vmr, vmr0);
 
+              // create work array copies to retain "pre-chemistry (aqueous)" values
+              Real vmr_pregas[gas_pcnst] = {};
+              Real vmr_precld[gas_pcnst] = {};
+              for(int i = 0; i < gas_pcnst; ++i) {
+                vmr_pregas[i] = vmr[i];
+                vmr_precld[i] = vmrcw[i];
+              }
+
               //----------------------
               // Aerosol microphysics
               //----------------------
@@ -1037,7 +1045,7 @@ void MAMMicrophysics::run_impl(const double dt) {
               constexpr int indexm = mam4::gas_chemistry::indexm;
               if(kk == 48) {
                 for(int i = 0; i < gas_pcnst; ++i) {
-                  printf("vmrcw,vmr-BEF-setsox:  %0.15E,  %0.15E, %i\n",
+                  printf("vmrcw,vmr-BEF-setsox:  %0.15E,  %0.15E,%i\n",
                          vmrcw[i], vmr[i], i + 1);
                 }
               }
@@ -1049,7 +1057,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                   vmrcw, vmr);
               if(kk == 48) {
                 for(int i = 0; i < gas_pcnst; ++i) {
-                  printf("vmrcw, vmr aft setsox:   %0.15E,   %0.15E, %i\n",
+                  printf("vmrcw, vmr aft setsox:   %0.15E,   %0.15E,%i\n",
                          vmrcw[i], vmr[i], i + 1);
                 }
               }
@@ -1069,27 +1077,19 @@ void MAMMicrophysics::run_impl(const double dt) {
                 // qaerwat_kk[imode]     = qaerwat_icol(imode, kk);
                 wetdens_kk[imode] = wetdens_icol(imode, kk);
               }
-
-              // aerosol/gas species tendencies (output)
-              Real vmr_tendbb[gas_pcnst][nqtendbb]   = {};
-              Real vmrcw_tendbb[gas_pcnst][nqtendbb] = {};
-
-              // create work array copies to retain "pre-chemistry" values
-              Real vmr_pregaschem[gas_pcnst]   = {};
-              Real vmr_precldchem[gas_pcnst]   = {};
-              Real vmrcw_precldchem[gas_pcnst] = {};
-              for(int i = 0; i < gas_pcnst; ++i) {
-                vmr_pregaschem[i]   = vmr[i];
-                vmr_precldchem[i]   = vmr[i];
-                vmrcw_precldchem[i] = vmrcw[i];
-              }
               // do aerosol microphysics (gas-aerosol exchange, nucleation,
               // coagulation)
+              // FIXME: Verify cldfrac is the right one by looking at EAM
+              // variable
               impl::modal_aero_amicphys_intr(
-                  config.amicphys, step, dt, temp, pmid, pdel, zm, pblh, qv,
-                  cldfrac, vmr, vmrcw, vmr_pregaschem, vmr_precldchem,
-                  vmrcw_precldchem, vmr_tendbb, vmrcw_tendbb, dgncur_a_kk,
-                  dgncur_awet_kk, wetdens_kk);  //, qaerwat_kk);
+                  // in
+                  kk, config.amicphys, dt, temp, pmid, pdel, zm, pblh, qv,
+                  cldfrac,
+                  // out
+                  vmr, vmrcw,
+                  // in
+                  vmr0, vmr_pregas, vmr_precld, dgncur_a_kk, dgncur_awet_kk,
+                  wetdens_kk);
               //-----------------
               // LINOZ chemistry
               //-----------------
