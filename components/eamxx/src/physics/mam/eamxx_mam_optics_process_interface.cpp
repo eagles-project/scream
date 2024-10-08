@@ -140,7 +140,7 @@ void MAMOptics::initialize_impl(const RunType run_type) {
   wet_atm_.nc    = get_field_in("nc").get_view<const Real **>();
   wet_atm_.qi    = get_field_in("qi").get_view<const Real **>();
   wet_atm_.ni    = get_field_in("ni").get_view<const Real **>();
-  
+
 
   constexpr int ntot_amode = mam4::AeroConfig::num_modes();
 
@@ -353,6 +353,11 @@ void MAMOptics::initialize_impl(const RunType run_type) {
   auto get_idx_rrtmgp_from_rrtmg_swbands_host =mam_coupling::view_int_1d::HostMirror(temporal.data(),nswbands_);
   get_idx_rrtmgp_from_rrtmg_swbands_ = mam_coupling::view_int_1d("rrtmg_to_rrtmgp_swbands",nswbands_);
   Kokkos::deep_copy(get_idx_rrtmgp_from_rrtmg_swbands_,get_idx_rrtmgp_from_rrtmg_swbands_host);
+  add_postcondition_check<Interval>(get_field_out("aero_g_sw"),m_grid,0.0,1.0,true);
+  add_postcondition_check<Interval>(get_field_out("aero_ssa_sw"),m_grid,0.0,1.0,true);
+  add_postcondition_check<Interval>(get_field_out("aero_tau_sw"),m_grid,0.0,1.0,true);
+  add_postcondition_check<Interval>(get_field_out("aero_tau_lw"),m_grid,0.0,1.0,true);
+
 }
 void MAMOptics::run_impl(const double dt) {
 
