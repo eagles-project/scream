@@ -1026,7 +1026,8 @@ void MAMMicrophysics::run_impl(const double dt) {
                                         // out
                                         vmr, vmr0);
 
-              // create work array copies to retain "pre-chemistry (aqueous)" values
+              // create work array copies to retain "pre-chemistry (aqueous)"
+              // values
               Real vmr_pregas[gas_pcnst] = {};
               Real vmr_precld[gas_pcnst] = {};
               for(int i = 0; i < gas_pcnst; ++i) {
@@ -1090,6 +1091,13 @@ void MAMMicrophysics::run_impl(const double dt) {
                   // in
                   vmr0, vmr_pregas, vmr_precld, dgncur_a_kk, dgncur_awet_kk,
                   wetdens_kk);
+
+              if(kk == 48) {
+                for(int i = 0; i < 31; ++i) {
+                  printf("vmrcw, vmr aft amicphys:   %0.15E,   %0.15E, %i\n",
+                         vmrcw[i], vmr[i], i);
+                }
+              }
               //-----------------
               // LINOZ chemistry
               //-----------------
