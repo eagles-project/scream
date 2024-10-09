@@ -236,6 +236,12 @@ private_except_cuda:
   // surface albedo: shortwave, direct
   const_view_1d d_sfc_alb_dir_vis_;
 
+  // surface shortwave, direct
+  const_view_1d d_sfc_flux_dir_vis_;
+ 
+  // snow depth land
+  const_view_1d snow_depth_land_;
+
   // time step number
   int step_;
 

@@ -173,6 +173,10 @@ void MAMMicrophysics::set_grids(
                       grid_name);  // cloud fraction
   add_field<Required>("sfc_alb_dir_vis", scalar2d_layout_col, nondim,
                       grid_name);  // surface albedo shortwave, direct
+  add_field<Required>("sfc_flux_dir_vis", scalar2d_layout_col, W/m2,
+                      grid_name);  // surface shortwave, direct
+  add_field<Required>("snow_depth_land", scalar2d_layout_col, m,
+                      grid_name);  // snow depth land
 
   // droplet activation can alter cloud liquid and number mixing ratios
   add_field<Updated>("qc", scalar3d_layout_mid, kg / kg, grid_name,
@@ -483,6 +487,12 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   // get surface albedo: shortwave, direct
   d_sfc_alb_dir_vis_ = get_field_in("sfc_alb_dir_vis").get_view<const Real *>();
 
+  // get surface shortwave, direct
+  d_sfc_flux_dir_vis_ = get_field_in("sfc_flux_dir_vis").get_view<const Real *>();
+
+  // get snow depth land
+  snow_depth_land_ = get_field_in("snow_depth_land").get_view<const Real *>();
+
   // perform any initialization work
   if(run_type == RunType::Initial) {
   }
@@ -745,6 +755,8 @@ void MAMMicrophysics::run_impl(const double dt) {
   const_view_1d &col_latitudes = col_latitudes_;
   // const_view_1d &col_longitudes    = col_longitudes_;
   const_view_1d &d_sfc_alb_dir_vis = d_sfc_alb_dir_vis_;
+  const_view_1d &d_sfc_flux_dir_vis = d_sfc_flux_dir_vis_;
+  const_view_1d &snow_depth_land = snow_depth_land_;
 
   mam_coupling::DryAtmosphere &dry_atm = dry_atm_;
   mam_coupling::AerosolState &dry_aero = dry_aero_;
@@ -836,6 +848,8 @@ void MAMMicrophysics::run_impl(const double dt) {
     clsmap_4[i]              = mam4::gas_chemistry::clsmap_4[i];
     permute_4[i]             = mam4::gas_chemistry::permute_4[i];
   }
+
+  auto gas_drydep_data = mam4::seq_drydep::set_gas_drydep_data();
 
   // loop over atmosphere columns and compute aerosol microphyscs
   Kokkos::parallel_for(
@@ -1068,9 +1082,24 @@ void MAMMicrophysics::run_impl(const double dt) {
               //----------------------
               // Dry deposition (gas)
               //----------------------
+              if ( k == nlev ) {
+                Real fraction_landuse[mam4::seq_drydep::NLUse] = {};
+                int col_index_season[mam4::seq_drydep::NLUse] = {};
+               
+                Real dvel[gas_pcnst] = {};
+                Real dflx[gas_pcnst] = {};    
 
-              // FIXME: C++ port in progress!
-              // mam4::drydep::drydep_xactive(...);
+              //mam4::drydep::drydep_xactive(gas_drydep_data, 
+              //                             fraction_landuse,
+              //                             ncdate,
+              //                             col_index_season,
+              //                             temp, temp, temp, 
+              //                             atm.interface_pressure(nlev+1), pmid, qv,
+              //                             rain, 
+              //                             snow_depth_land(icol),
+              //                             d_sfc_flux_dir_vis(icol), 
+              //                             vmr, dvel, dflx);
+              }
 
               mam_coupling::vmr2mmr(vmr, adv_mass_kg_per_moles, qq);
               mam_coupling::vmr2mmr(vmrcw, adv_mass_kg_per_moles, qqcw);
