@@ -350,12 +350,14 @@ void MAMAci::initialize_impl(const RunType run_type) {
     wet_aero_.int_aero_nmr[m] =
         get_field_out(int_nmr_field_name).get_view<Real **>();
     dry_aero_.int_aero_nmr[m] = buffer_.dry_int_aero_nmr[m];
+    add_postcondition_check<Interval>(get_field_out(int_nmr_field_name),grid_name,0.0,1e13,true);
 
     // cloudborne aerosol tracers of interest: number (n) mixing ratios
     const char *cld_nmr_field_name = mam_coupling::cld_aero_nmr_field_name(m);
     wet_aero_.cld_aero_nmr[m] =
         get_field_out(cld_nmr_field_name).get_view<Real **>();
     dry_aero_.cld_aero_nmr[m] = buffer_.dry_cld_aero_nmr[m];
+    add_postcondition_check<Interval>(get_field_out(cld_nmr_field_name),grid_name,0.0,1e13,true);
 
     for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
       // (interstitial) aerosol tracers of interest: mass (q) mixing ratios
@@ -366,6 +368,7 @@ void MAMAci::initialize_impl(const RunType run_type) {
         wet_aero_.int_aero_mmr[m][a] =
             get_field_out(int_mmr_field_name).get_view<Real **>();
         dry_aero_.int_aero_mmr[m][a] = buffer_.dry_int_aero_mmr[m][a];
+        add_postcondition_check<Interval>(get_field_out(int_mmr_field_name),grid_name,-1e-20, 1e-2,true);
       }
 
       // (cloudborne) aerosol tracers of interest: mass (q) mixing ratios
@@ -375,6 +378,8 @@ void MAMAci::initialize_impl(const RunType run_type) {
         wet_aero_.cld_aero_mmr[m][a] =
             get_field_out(cld_mmr_field_name).get_view<Real **>();
         dry_aero_.cld_aero_mmr[m][a] = buffer_.dry_cld_aero_mmr[m][a];
+        add_postcondition_check<Interval>(get_field_out(cld_mmr_field_name),grid_name,-1e-20, 1e-2,true);
+
       }
     }
   }
@@ -383,6 +388,8 @@ void MAMAci::initialize_impl(const RunType run_type) {
     wet_aero_.gas_mmr[g] =
         get_field_out(gas_mmr_field_name).get_view<Real **>();
     dry_aero_.gas_mmr[g] = buffer_.dry_gas_mmr[g];
+    add_postcondition_check<Interval>(get_field_out(gas_mmr_field_name),grid_name,-1e-20, 1e-2,true);
+
   }
 
   // hetrozenous freezing outputs
