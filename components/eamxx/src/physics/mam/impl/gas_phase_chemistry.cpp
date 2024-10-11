@@ -246,6 +246,45 @@ void gas_phase_chemistry(
   Real epsilon[clscnt4];
   mam4::gas_chemistry::imp_slv_inti(epsilon);
 
+  // FIXME: BALLI- Hardwired
+
+  Real reaction_rates_hardwired[rxntot] = {0,
+                                           4.505614958995002E-015,
+                                           2.838082398133522E-006,
+                                           1.470668860923120E-006,
+                                           7.185387606092601E-006,
+                                           9.699433943599741E-006,
+                                           1.272008948243572E-005};
+  Real het_rates_hardwired[gas_pcnst]   = {
+        0.000000000000000E+000, 3.161797749446358E-006, 4.444435465865599E-006,
+        3.161797749446358E-006, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+        0.000000000000000E+000};
+
+  Real extfrc_rates_hardwired[extcnt] = {
+      0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+      0.000000000000000E+000, 0.000000000000000E+000, 0.000000000000000E+000,
+      0.000000000000000E+000, 0.000000000000000E+000, 6.202603542883013E-018};
+
+  for(int i = 0; i < rxntot; ++i) {
+    reaction_rates[i] = reaction_rates_hardwired[i];
+  }
+  for(int i = 0; i < gas_pcnst; ++i) {
+    het_rates[i] = het_rates_hardwired[i];
+  }
+  for(int i = 0; i < extcnt; ++i) {
+    extfrc_rates[i] = extfrc_rates_hardwired[i];
+  }
+
+  // FIXME: BALLI- Hardwired ^^^^^
+
   // Mixing ratios before chemistry changes
   for(int i = 0; i < gas_pcnst; ++i) {
     vmr0[i] = qq[i];
@@ -253,9 +292,15 @@ void gas_phase_chemistry(
 
   // solve chemical system implicitly
   Real prod_out[clscnt4], loss_out[clscnt4];
-  mam4::gas_chemistry::imp_sol(qq, reaction_rates, het_rates, extfrc_rates, dt,
-                               permute_4, clsmap_4, factor, epsilon, prod_out,
-                               loss_out);
+  mam4::gas_chemistry::imp_sol(qq,                                       // out
+                               reaction_rates, het_rates, extfrc_rates,  // in
+                               dt, permute_4, clsmap_4, factor,          // in
+                               epsilon, prod_out, loss_out);             // out
+  /*if(kk == 48) {
+    for(int i = 0; i < 3; ++i) {
+      printf("q-aft_imp:   %0.15E, %i\n", qq[i], i + 1);
+    }
+  }*/
 
   // save h2so4 change by gas phase chem (for later new particle nucleation)
   if(ndx_h2so4 > 0) {

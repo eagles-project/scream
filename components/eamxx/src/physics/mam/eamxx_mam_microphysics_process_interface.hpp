@@ -46,10 +46,7 @@ class MAMMicrophysics final : public scream::AtmosphereProcess {
   AtmosphereProcessType type() const override;
 
   // The name of the subcomponent
-  std::string name() const const { return "mam_aero_microphysics"; }
-
-  // set aerosol microphysics configuration parameters (called by constructor)
-  void configure(const ekat::ParameterList &params);
+  std::string name() const { return "mam_aero_microphysics"; }
 
   // grid
   void set_grids(
@@ -67,9 +64,6 @@ class MAMMicrophysics final : public scream::AtmosphereProcess {
 
   // Finalize
   void finalize_impl(){/*Do nothing*/};
-
-  // performs some checks on the tracers group
-  void set_computed_group_impl(const FieldGroup &group) override;
 
  private:
   // number of horizontal columns and vertical levels
