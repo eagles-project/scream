@@ -637,8 +637,12 @@ void MAMMicrophysics::run_impl(const double dt) {
   // addition of dt */
   trace_time_state_.t_now = ts.frac_of_year_in_days();
   scream::mam_coupling::advance_tracer_data(
-      TracerDataReader_, *TracerHorizInterp_, ts, trace_time_state_,
-      tracer_data_, dry_atm_.p_mid, dry_atm_.z_iface, cnst_offline_);
+      TracerDataReader_,                 // in
+      *TracerHorizInterp_,               // out
+      ts,                                // in
+      trace_time_state_, tracer_data_,   // out
+      dry_atm_.p_mid, dry_atm_.z_iface,  // in
+      cnst_offline_);                    // out
   Kokkos::fence();
 
 #if defined(ENABLE_OUTPUT_TRACER_FIELDS)
@@ -652,8 +656,12 @@ void MAMMicrophysics::run_impl(const double dt) {
 #endif
 
   scream::mam_coupling::advance_tracer_data(
-      LinozDataReader_, *LinozHorizInterp_, ts, linoz_time_state_, linoz_data_,
-      dry_atm_.p_mid, dry_atm_.z_iface, linoz_output);
+      LinozDataReader_,                  // in
+      *LinozHorizInterp_,                // out
+      ts,                                // in
+      linoz_time_state_, linoz_data_,    // out
+      dry_atm_.p_mid, dry_atm_.z_iface,  // in
+      linoz_output);                     // out
   Kokkos::fence();
 
 #if defined(ENABLE_OUTPUT_TRACER_FIELDS)
@@ -792,19 +800,19 @@ void MAMMicrophysics::run_impl(const double dt) {
   // loop over atmosphere columns and compute aerosol microphyscs
   Kokkos::parallel_for(
       policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
-        const int icol = team.league_rank();   // column index
-        Real col_lat   = col_latitudes(icol);  // column latitude (degrees?)
+        const int icol     = team.league_rank();   // column index
+        const Real col_lat = col_latitudes(icol);  // column latitude (degrees?)
 
         // convert column latitude to radians
-        Real rlats = col_lat * M_PI / 180.0;
+        const Real rlats = col_lat * M_PI / 180.0;
 
         // fetch column-specific atmosphere state data
-        auto atm = mam_coupling::atmosphere_for_column(dry_atm, icol);
-        auto wet_diameter_icol =
+        const auto atm = mam_coupling::atmosphere_for_column(dry_atm, icol);
+        const auto wet_diameter_icol =
             ekat::subview(wet_geometric_mean_diameter_i, icol);
-        auto dry_diameter_icol =
+        const auto dry_diameter_icol =
             ekat::subview(dry_geometric_mean_diameter_i, icol);
-        auto wetdens_icol = ekat::subview(wetdens, icol);
+        const auto wetdens_icol = ekat::subview(wetdens, icol);
 
         // fetch column-specific subviews into aerosol prognostics
         mam4::Prognostics progs =
@@ -814,9 +822,9 @@ void MAMMicrophysics::run_impl(const double dt) {
         mam4::mo_setext::Forcing forcings_in[extcnt];
 
         for(int i = 0; i < extcnt; ++i) {
-          int nsectors       = forcings[i].nsectors;
-          int frc_ndx        = forcings[i].frc_ndx;
-          auto file_alt_data = forcings[i].file_alt_data;
+          const int nsectors       = forcings[i].nsectors;
+          const int frc_ndx        = forcings[i].frc_ndx;
+          const auto file_alt_data = forcings[i].file_alt_data;
 
           forcings_in[i].nsectors = nsectors;
           forcings_in[i].frc_ndx  = frc_ndx;
@@ -837,15 +845,18 @@ void MAMMicrophysics::run_impl(const double dt) {
           cnst_offline_icol[i] = ekat::subview(cnst_offline[i], icol);
         }
         // FIXME::::::::::::::INOUTS OF THESE FUNCTIONS!!!
-        mam4::mo_setinv::setinv(team, invariants_icol, atm.temperature,
-                                atm.vapor_mixing_ratio, cnst_offline_icol,
-                                atm.pressure);
+        mam4::mo_setinv::setinv(team,                                     // in
+                                invariants_icol,                          // out
+                                atm.temperature, atm.vapor_mixing_ratio,  // in
+                                cnst_offline_icol, atm.pressure);         // in
 
         // calculate o3 column densities (first component of col_dens in Fortran
         // code)
         auto o3_col_dens_i = ekat::subview(o3_col_dens, icol);
-        impl::compute_o3_column_density(team, atm, progs, invariants_icol,
-                                        adv_mass_kg_per_moles, o3_col_dens_i);
+        impl::compute_o3_column_density(team, atm, progs,       // in
+                                        invariants_icol,        // in
+                                        adv_mass_kg_per_moles,  // in
+                                        o3_col_dens_i);         // out
 
         // set up photolysis work arrays for this column.
         mam4::mo_photo::PhotoTableWorkArrays photo_work_arrays_icol;
@@ -855,14 +866,18 @@ void MAMMicrophysics::run_impl(const double dt) {
         //  set work view using 1D photo_work_arrays_icol
         // Note: We are not allocating views here.
         mam4::mo_photo::set_photo_table_work_arrays(
-            photo_table, work_photo_table_icol, photo_work_arrays_icol);
+            photo_table, work_photo_table_icol,  // in
+            photo_work_arrays_icol);             // out
 
         const auto &photo_rates_icol = ekat::subview(photo_rates, icol);
         mam4::mo_photo::table_photo(
-            photo_rates_icol, atm.pressure, atm.hydrostatic_dp, atm.temperature,
-            o3_col_dens_i, zenith_angle(icol), d_sfc_alb_dir_vis(icol),
-            atm.liquid_mixing_ratio, atm.cloud_fraction, eccf, photo_table,
-            photo_work_arrays_icol);
+            photo_rates_icol,                             // out
+            atm.pressure, atm.hydrostatic_dp,             // in
+            atm.temperature, o3_col_dens_i,               // in
+            zenith_angle(icol), d_sfc_alb_dir_vis(icol),  // in
+            atm.liquid_mixing_ratio, atm.cloud_fraction,  // in
+            eccf, photo_table,                            // in
+            photo_work_arrays_icol);                      // out
 
         // compute aerosol microphysics on each vertical level within this
         // column

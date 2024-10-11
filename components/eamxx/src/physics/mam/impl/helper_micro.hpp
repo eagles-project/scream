@@ -451,7 +451,7 @@ inline std::shared_ptr<AtmosphereInput> create_tracer_data_reader(
 }  // create_tracer_data_reader
 
 inline void update_tracer_data_from_file(
-    std::shared_ptr<AtmosphereInput> &scorpio_reader,
+    const std::shared_ptr<AtmosphereInput> &scorpio_reader,
     const int time_index,  // zero-based
     AbstractRemapper &tracer_horiz_interp, TracerData &tracer_data) {
   // 1. read from field
@@ -476,9 +476,9 @@ inline void update_tracer_data_from_file(
 
 }  // update_tracer_data_from_file
 inline void update_tracer_timestate(
-    std::shared_ptr<AtmosphereInput> &scorpio_reader, const util::TimeStamp &ts,
-    AbstractRemapper &tracer_horiz_interp, TracerTimeState &time_state,
-    TracerData &data_tracer) {
+    const std::shared_ptr<AtmosphereInput> &scorpio_reader,
+    const util::TimeStamp &ts, AbstractRemapper &tracer_horiz_interp,
+    TracerTimeState &time_state, TracerData &data_tracer) {
   // Now we check if we have to update the data that changes monthly
   // NOTE:  This means that tracer external forcing assumes monthly data to
   // update.  Not
@@ -690,11 +690,12 @@ inline void perform_vertical_interpolation(const const_view_1d &altitude_int,
 }
 
 inline void advance_tracer_data(
-    std::shared_ptr<AtmosphereInput> &scorpio_reader,
-    AbstractRemapper &tracer_horiz_interp, const util::TimeStamp &ts,
-    TracerTimeState &time_state, TracerData &data_tracer,
-    const const_view_2d &p_tgt, const const_view_2d &zi_tgt,
-    const view_2d output[]) {
+    const std::shared_ptr<AtmosphereInput> &scorpio_reader,   // in
+    AbstractRemapper &tracer_horiz_interp,                    // out
+    const util::TimeStamp &ts,                                // in
+    TracerTimeState &time_state, TracerData &data_tracer,     // out
+    const const_view_2d &p_tgt, const const_view_2d &zi_tgt,  // in
+    const view_2d output[]) {                                 // out
   /* Update the TracerTimeState to reflect the current time, note the addition
    * of dt */
   time_state.t_now = ts.frac_of_year_in_days();
