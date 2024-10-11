@@ -491,11 +491,6 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
       m_params.get<std::string>("mam4_xs_long_file");
 
   photo_table_ = impl::read_photo_table(rsf_file, xs_long_file);
-  // set up our preprocess/postprocess functors
-  preprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_,
-                         dry_aero_);
-  postprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_,
-                          dry_aero_);
 
   // set field property checks for the fields in this process
   /* e.g.
@@ -540,10 +535,9 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   // here's where we store per-column photolysis rates
   photo_rates_ = view_3d("photo_rates", ncol_, nlev_, mam4::mo_photo::phtcnt);
 
-  //
-  // Load the first month into spa_end.
-  // Note: At the first time step, the data will be moved into spa_beg,
-  //       and spa_end will be reloaded from file with the new month.
+  // Load the first month into extfrc_lst_end.
+  // Note: At the first time step, the data will be moved into extfrc_lst_beg,
+  //       and extfrc_lst_end will be reloaded from file with the new month.
   const int curr_month = timestamp().get_month() - 1;  // 0-based
 
   scream::mam_coupling::update_tracer_data_from_file(
@@ -567,12 +561,20 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   //
   acos_cosine_zenith_host_ = view_1d_host("host_acos(cosine_zenith)", ncol_);
   acos_cosine_zenith_      = view_1d("device_acos(cosine_zenith)", ncol_);
-}
+
+  //-----------------------------------------------------------------
+  // Setup preprocessing and post processing
+  //-----------------------------------------------------------------
+  preprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_,
+                         dry_aero_);
+  postprocess_.initialize(ncol_, nlev_, wet_atm_, wet_aero_, dry_atm_,
+                          dry_aero_);
+
+}  // initialize_impl
 
 // ================================================================
 //  RUN_IMPL
 // ================================================================
-
 void MAMMicrophysics::run_impl(const double dt) {
 #if 0
   const auto scan_policy = ekat::ExeSpaceUtils<
@@ -597,20 +599,20 @@ void MAMMicrophysics::run_impl(const double dt) {
   const auto wetdens = get_field_in("wetdens").get_view<const Real ***>();
 
   // climatology data for linear stratospheric chemistry
-  auto linoz_o3_clim = buffer_.scratch[0];  // ozone (climatology) [vmr]
-  auto linoz_o3col_clim =
-      buffer_
-          .scratch[1];  // column o3 above box (climatology) [Dobson Units (DU)]
-  auto linoz_t_clim   = buffer_.scratch[2];  // temperature (climatology) [K]
+  // ozone (climatology) [vmr]
+  auto linoz_o3_clim = buffer_.scratch[0];
+  // column o3 above box (climatology) [Dobson Units (DU)]
+  auto linoz_o3col_clim = buffer_.scratch[1];
+  auto linoz_t_clim     = buffer_.scratch[2];  // temperature (climatology) [K]
   auto linoz_PmL_clim = buffer_.scratch[3];  // P minus L (climatology) [vmr/s]
-  auto linoz_dPmL_dO3 =
-      buffer_.scratch[4];  // sensitivity of P minus L to O3 [1/s]
-  auto linoz_dPmL_dT =
-      buffer_.scratch[5];  // sensitivity of P minus L to T3 [K]
-  auto linoz_dPmL_dO3col = buffer_.scratch[6];  // sensitivity of P minus L to
-                                                // overhead O3 column [vmr/DU]
-  auto linoz_cariolle_pscs =
-      buffer_.scratch[7];  // Cariolle parameter for PSC loss of ozone [1/s]
+  // sensitivity of P minus L to O3 [1/s]
+  auto linoz_dPmL_dO3 = buffer_.scratch[4];
+  // sensitivity of P minus L to T3 [K]
+  auto linoz_dPmL_dT = buffer_.scratch[5];
+  // sensitivity of P minus L to overhead O3 column [vmr/DU]
+  auto linoz_dPmL_dO3col = buffer_.scratch[6];
+  // Cariolle parameter for PSC loss of ozone [1/s]
+  auto linoz_cariolle_pscs = buffer_.scratch[7];
 
   view_2d linoz_output[8];
   linoz_output[0] = linoz_o3_clim;
@@ -736,8 +738,8 @@ void MAMMicrophysics::run_impl(const double dt) {
   // Use the orbital parameters to calculate the solar declination and
   // eccentricity factor
   Real delta, eccf;
-  auto calday = ts2.frac_of_year_in_days() +
-                1;  // Want day + fraction; calday 1 == Jan 1 0Z
+  // Want day + fraction; calday 1 == Jan 1 0Z
+  auto calday = ts2.frac_of_year_in_days() + 1;
   shr_orb_decl_c2f(calday, eccen, mvelpp, lambm0, obliqr,  // in
                    &delta, &eccf);                         // out
   {
@@ -748,8 +750,7 @@ void MAMMicrophysics::run_impl(const double dt) {
     // get a host copy of lat/lon
     // Determine the cosine zenith angle
     // NOTE: Since we are bridging to F90 arrays this must be done on HOST and
-    // then
-    //       deep copied to a device view.
+    // then deep copied to a device view.
 
     // Now use solar declination to calculate zenith angle for all points
     for(int i = 0; i < ncol_; i++) {
@@ -791,21 +792,14 @@ void MAMMicrophysics::run_impl(const double dt) {
   // loop over atmosphere columns and compute aerosol microphyscs
   Kokkos::parallel_for(
       policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
-        const int icol = team.league_rank();  // column index
+        const int icol = team.league_rank();   // column index
+        Real col_lat   = col_latitudes(icol);  // column latitude (degrees?)
 
-        Real col_lat = col_latitudes(icol);  // column latitude (degrees?)
-        // Real col_lon = col_longitudes(icol);  // column longitude
-
-        Real rlats =
-            col_lat * M_PI / 180.0;  // convert column latitude to radians
-        // Real rlons =
-        //     col_lon * M_PI / 180.0;  // convert column longitude to radians
+        // convert column latitude to radians
+        Real rlats = col_lat * M_PI / 180.0;
 
         // fetch column-specific atmosphere state data
-        auto atm     = mam_coupling::atmosphere_for_column(dry_atm, icol);
-        auto z_iface = ekat::subview(dry_atm.z_iface, icol);
-        Real phis    = dry_atm.phis(icol);
-
+        auto atm = mam_coupling::atmosphere_for_column(dry_atm, icol);
         auto wet_diameter_icol =
             ekat::subview(wet_geometric_mean_diameter_i, icol);
         auto dry_diameter_icol =
@@ -816,8 +810,6 @@ void MAMMicrophysics::run_impl(const double dt) {
         mam4::Prognostics progs =
             mam_coupling::aerosols_for_column(dry_aero, icol);
 
-        // set up diagnostics
-        mam4::Diagnostics diags(nlev);
         const auto invariants_icol = ekat::subview(invariants, icol);
         mam4::mo_setext::Forcing forcings_in[extcnt];
 
@@ -844,7 +836,7 @@ void MAMMicrophysics::run_impl(const double dt) {
         for(int i = 0; i < mam4::mo_setinv::num_tracer_cnst; ++i) {
           cnst_offline_icol[i] = ekat::subview(cnst_offline[i], icol);
         }
-
+        // FIXME::::::::::::::INOUTS OF THESE FUNCTIONS!!!
         mam4::mo_setinv::setinv(team, invariants_icol, atm.temperature,
                                 atm.vapor_mixing_ratio, cnst_offline_icol,
                                 atm.pressure);
@@ -881,7 +873,6 @@ void MAMMicrophysics::run_impl(const double dt) {
               Real pmid    = atm.pressure(kk);
               Real pdel    = atm.hydrostatic_dp(kk);
               Real zm      = atm.height(kk);
-              Real zi      = z_iface(kk);
               Real pblh    = atm.planetary_boundary_layer_height;
               Real qv      = atm.vapor_mixing_ratio(kk);
               Real cldfrac = atm.cloud_fraction(kk);
@@ -1004,8 +995,6 @@ void MAMMicrophysics::run_impl(const double dt) {
               }
               // do aerosol microphysics (gas-aerosol exchange, nucleation,
               // coagulation)
-              // FIXME: Verify cldfrac is the right one by looking at EAM
-              // variable
               impl::modal_aero_amicphys_intr(
                   // in
                   config.amicphys, dt, temp, pmid, pdel, zm, pblh, qv, cldfrac,
@@ -1057,7 +1046,7 @@ void MAMMicrophysics::run_impl(const double dt) {
               // Dry deposition (gas)
               //----------------------
 
-              // FIXME: C++ port in progress!
+              // FIXME: drydep integration in progress!
               // mam4::drydep::drydep_xactive(...);
 
               mam_coupling::vmr2mmr(vmr, adv_mass_kg_per_moles, qq);
