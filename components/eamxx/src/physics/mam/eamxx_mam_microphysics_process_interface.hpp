@@ -69,6 +69,10 @@ class MAMMicrophysics final : public scream::AtmosphereProcess {
   // number of horizontal columns and vertical levels
   int ncol_, nlev_;
 
+  // Namelist for LINOZ
+  int o3_lbl_;
+  Real o3_tau_, o3_sfc_;
+
   // The orbital year, used for zenith angle calculations:
   // If > 0, use constant orbital year for duration of simulation
   // If < 0, use year from timestamp for orbital parameters
@@ -222,7 +226,7 @@ class MAMMicrophysics final : public scream::AtmosphereProcess {
   std::shared_ptr<const AbstractGrid> grid_;
 
   // sets defaults for "namelist parameters"
-  void set_defaults_();
+  void set_namelist_params_();
 
   mam_coupling::TracerTimeState linoz_time_state_;
   view_2d work_photo_table_;

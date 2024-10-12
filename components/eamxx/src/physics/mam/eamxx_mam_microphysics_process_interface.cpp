@@ -23,80 +23,60 @@ MAMMicrophysics::MAMMicrophysics(const ekat::Comm &comm,
                                  const ekat::ParameterList &params)
     : AtmosphereProcess(comm, params), aero_config_() {
   // Asserts for the runtime or namelist options
-  /*constexpr Real o3_tau = 172800.000000000;
-              constexpr Real o3_sfc = 3.000000000000000E-008;
-              constexpr int o3_lbl  = 4;
+  // ----- Aerosol Microphysics processes on/off switches -------
+  EKAT_REQUIRE_MSG(m_params.isParameter("mam4_do_cond"),
+                   "ERROR:  mam4_do_cond is missing from mam4_aero_microphys  "
+                   "parameter list.");
 
-  EKAT_REQUIRE_MSG(m_params.isParameter("o3_tau"),
-                   "ERROR: o3_tau is missing from mam4_aero_microphys parameter
-  list."); EKAT_REQUIRE_MSG(m_params.isParameter("o3_sfc"), "ERROR:  o3_sfc is
-  missing from mam4_aero_microphys parameter list.");
-  EKAT_REQUIRE_MSG(m_params.isParameter("o3_lbl"),
-                   "ERROR:  o3_lbl is missing from mam4_aero_microphys parameter
-  list.");
+  EKAT_REQUIRE_MSG(
+      m_params.isParameter("mam4_do_rename"),
+      "ERROR:  mam4_do_rename is missing from mam4_aero_microphys   "
+      "parameter list.");
 
-  EKAT_REQUIRE_MSG(m_params.isParameter("do_cond"),
-                   "ERROR:  do_cond is missing from mam4_aero_microphys
-  parameter list.");
+  EKAT_REQUIRE_MSG(m_params.isParameter("mam4_do_newnuc"),
+                   "ERROR:  mam4_do_newnuc is missing from mam4_aero_microphys "
+                   " parameter list.");
 
-  EKAT_REQUIRE_MSG(m_params.isParameter("do_rename"),
-                   "ERROR:  do_rename is missing from mam4_aero_microphys
-  parameter list.");
+  EKAT_REQUIRE_MSG(m_params.isParameter("mam4_do_coag"),
+                   "ERROR:  mam4_do_coag is missing from mam4_aero_microphys  "
+                   "parameter list.");
+  // ----- LINOZ namelist parameters -------
 
-  EKAT_REQUIRE_MSG(m_params.isParameter("do_newnuc"),
-                   "ERROR:  do_newnuc is missing from mam4_aero_microphys
-  parameter list.");
+  EKAT_REQUIRE_MSG(
+      m_params.isParameter("mam4_o3_tau"),
+      "ERROR: mam4_o3_tau is missing from mam4_aero_microphys parameter list.");
 
-  EKAT_REQUIRE_MSG(m_params.isParameter("do_coag"),
-                   "ERROR:  do_coag is missing from mam4_aero_microphys
-  parameter list.");
+  EKAT_REQUIRE_MSG(m_params.isParameter("mam4_o3_sfc"),
+                   "ERROR:  mam4_o3_sfc is  missing from mam4_aero_microphys "
+                   "parameter list.");
 
-  EKAT_REQUIRE_MSG(m_params.isParameter(""),
-                   "ERROR:  is missing from mam4_aero_microphys parameter
-  list.");
+  EKAT_REQUIRE_MSG(m_params.isParameter("mam4_o3_lbl"),
+                   "ERROR:  mam4_o3_lbl is missing from mam4_aero_microphys "
+                   "parameter  list.");
 
-  EKAT_REQUIRE_MSG(m_params.isParameter(""),
-                   "ERROR:  is missing from mam4_aero_microphys parameter
-  list.");
-
-  EKAT_REQUIRE_MSG(m_params.isParameter(""),
-                   "ERROR:  is missing from mam4_aero_microphys parameter
-  list.");
-
-  EKAT_REQUIRE_MSG(m_params.isParameter(""),
-                   "ERROR:  is missing from mam4_aero_microphys parameter
-  list.");
-
-  EKAT_REQUIRE_MSG(m_params.isParameter(""),
-                   "ERROR:  is missing from mam4_aero_microphys parameter
-  list.");
-
-  EKAT_REQUIRE_MSG(m_params.isParameter(""),
-                   "ERROR:  is missing from mam4_aero_microphys parameter
-  list.");
-
-  EKAT_REQUIRE_MSG(m_params.isParameter(""),
-                   "ERROR:  is missing from mam4_aero_microphys parameter
-  list.");*/
-
-  set_defaults_();
+  set_namelist_params_();
 }
 
 AtmosphereProcessType MAMMicrophysics::type() const {
   return AtmosphereProcessType::Physics;
 }
 
-void MAMMicrophysics::set_defaults_() {
-  config_.amicphys.do_cond   = true;
-  config_.amicphys.do_rename = true;
-  config_.amicphys.do_newnuc = true;
-  config_.amicphys.do_coag   = true;
+void MAMMicrophysics::set_namelist_params_() {
+  config_.amicphys.do_cond   = m_params.get<bool>("mam4_do_cond");
+  config_.amicphys.do_rename = m_params.get<bool>("mam4_do_rename");
+  config_.amicphys.do_newnuc = m_params.get<bool>("mam4_do_newnuc");
+  config_.amicphys.do_coag   = m_params.get<bool>("mam4_do_coag");
 
   // these parameters guide the coupling between parameterizations
   // NOTE: mam4xx was ported with these parameters fixed, so it's probably not
   // NOTE: safe to change these without code modifications.
   config_.amicphys.gaexch_h2so4_uptake_optaa = 2;
   config_.amicphys.newnuc_h2so4_conc_optaa   = 2;
+
+  // LINOZ namelist parameters
+  o3_lbl_ = m_params.get<int>("mam4_o3_lbl");
+  o3_tau_ = m_params.get<Real>("mam4_o3_tau");
+  o3_sfc_ = m_params.get<Real>("mam4_o3_sfc");
 }
 
 // ================================================================
@@ -853,6 +833,10 @@ void MAMMicrophysics::run_impl(const double dt) {
     clsmap_4[i]              = mam4::gas_chemistry::clsmap_4[i];
     permute_4[i]             = mam4::gas_chemistry::permute_4[i];
   }
+  // LINOZ parameters from the namelist
+  const int o3_lbl  = o3_lbl_;
+  const Real o3_tau = o3_tau_;
+  const Real o3_sfc = o3_sfc_;
 
   Real vmr_hardwired1[72] = {
       1.094020749055445E-006, 1.144412668037959E-006, 1.251726743710015E-006,
@@ -927,7 +911,6 @@ void MAMMicrophysics::run_impl(const double dt) {
         for(int i = 0; i < mam4::mo_setinv::num_tracer_cnst; ++i) {
           cnst_offline_icol[i] = ekat::subview(cnst_offline[i], icol);
         }
-        // FIXME::::::::::::::INOUTS OF THESE FUNCTIONS!!!
         mam4::mo_setinv::setinv(team,                                     // in
                                 invariants_icol,                          // out
                                 atm.temperature, atm.vapor_mixing_ratio,  // in
@@ -1135,16 +1118,13 @@ void MAMMicrophysics::run_impl(const double dt) {
                   do3_linoz, do3_linoz_psc, ss_o3, o3col_du_diag,
                   o3clim_linoz_diag, zenith_angle_degrees);
 
-              printf("vmr vs. vmr hard:%e, %e,%i\n", vmr[o3_ndx],
-                     vmr_hardwired1[kk], kk);
-
-              constexpr int o3_lbl = 4;
+              // printf("vmr vs. vmr hard:%e, %e,%i\n", vmr[o3_ndx],
+              //        vmr_hardwired1[kk], kk);
+              vmr[o3_ndx] = vmr_hardwired1[kk];  // BALLI-remove it!!!Hardwired
+              // Update source terms above the ozone decay threshold
               if(kk >= nlev - o3_lbl) {
-                // update source terms above the ozone decay threshold
-                // FIXME: move o3_tau to namelist
-                constexpr Real o3_tau = 172800.000000000;
-                constexpr Real o3_sfc = 3.000000000000000E-008;
                 Real o3l_vmr, do3mass;
+                // initial O3 vmr
                 o3l_vmr = vmr[o3_ndx];
                 // get new value of O3 vmr
                 o3l_vmr =
@@ -1156,7 +1136,8 @@ void MAMMicrophysics::run_impl(const double dt) {
                 // Update the mixing ratio (vmr) for O3
                 vmr[o3_ndx] = o3l_vmr;
               }
-
+              printf("aft vmr(:,:,o3_ndx):          %i  %0.15E\n", kk,
+                     vmr[o3_ndx]);
               // Check for negative values and reset to zero
               for(int i = 0; i < gas_pcnst; ++i) {
                 if(vmr[i] < 0.0) vmr[i] = 0.0;
