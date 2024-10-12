@@ -22,6 +22,63 @@ namespace scream {
 MAMMicrophysics::MAMMicrophysics(const ekat::Comm &comm,
                                  const ekat::ParameterList &params)
     : AtmosphereProcess(comm, params), aero_config_() {
+  // Asserts for the runtime or namelist options
+  /*constexpr Real o3_tau = 172800.000000000;
+              constexpr Real o3_sfc = 3.000000000000000E-008;
+              constexpr int o3_lbl  = 4;
+
+  EKAT_REQUIRE_MSG(m_params.isParameter("o3_tau"),
+                   "ERROR: o3_tau is missing from mam4_aero_microphys parameter
+  list."); EKAT_REQUIRE_MSG(m_params.isParameter("o3_sfc"), "ERROR:  o3_sfc is
+  missing from mam4_aero_microphys parameter list.");
+  EKAT_REQUIRE_MSG(m_params.isParameter("o3_lbl"),
+                   "ERROR:  o3_lbl is missing from mam4_aero_microphys parameter
+  list.");
+
+  EKAT_REQUIRE_MSG(m_params.isParameter("do_cond"),
+                   "ERROR:  do_cond is missing from mam4_aero_microphys
+  parameter list.");
+
+  EKAT_REQUIRE_MSG(m_params.isParameter("do_rename"),
+                   "ERROR:  do_rename is missing from mam4_aero_microphys
+  parameter list.");
+
+  EKAT_REQUIRE_MSG(m_params.isParameter("do_newnuc"),
+                   "ERROR:  do_newnuc is missing from mam4_aero_microphys
+  parameter list.");
+
+  EKAT_REQUIRE_MSG(m_params.isParameter("do_coag"),
+                   "ERROR:  do_coag is missing from mam4_aero_microphys
+  parameter list.");
+
+  EKAT_REQUIRE_MSG(m_params.isParameter(""),
+                   "ERROR:  is missing from mam4_aero_microphys parameter
+  list.");
+
+  EKAT_REQUIRE_MSG(m_params.isParameter(""),
+                   "ERROR:  is missing from mam4_aero_microphys parameter
+  list.");
+
+  EKAT_REQUIRE_MSG(m_params.isParameter(""),
+                   "ERROR:  is missing from mam4_aero_microphys parameter
+  list.");
+
+  EKAT_REQUIRE_MSG(m_params.isParameter(""),
+                   "ERROR:  is missing from mam4_aero_microphys parameter
+  list.");
+
+  EKAT_REQUIRE_MSG(m_params.isParameter(""),
+                   "ERROR:  is missing from mam4_aero_microphys parameter
+  list.");
+
+  EKAT_REQUIRE_MSG(m_params.isParameter(""),
+                   "ERROR:  is missing from mam4_aero_microphys parameter
+  list.");
+
+  EKAT_REQUIRE_MSG(m_params.isParameter(""),
+                   "ERROR:  is missing from mam4_aero_microphys parameter
+  list.");*/
+
   set_defaults_();
 }
 
@@ -797,6 +854,32 @@ void MAMMicrophysics::run_impl(const double dt) {
     permute_4[i]             = mam4::gas_chemistry::permute_4[i];
   }
 
+  Real vmr_hardwired1[72] = {
+      1.094020749055445E-006, 1.144412668037959E-006, 1.251726743710015E-006,
+      1.581917004406852E-006, 2.089456499942353E-006, 2.912079967457174E-006,
+      4.014262785631317E-006, 5.374806357503455E-006, 6.584189296105144E-006,
+      7.516118943934228E-006, 8.872285787269388E-006, 9.758538654526728E-006,
+      9.850400895657121E-006, 9.565540650219090E-006, 7.658854496738463E-006,
+      5.870711612487315E-006, 3.603305348184436E-006, 2.401881745976777E-006,
+      1.458461828635502E-006, 9.638641487905038E-007, 5.447863881397491E-007,
+      3.659203456308138E-007, 2.257951822626021E-007, 1.391162337052856E-007,
+      8.033678053764877E-008, 5.532010582444914E-008, 4.948332838661684E-008,
+      4.397772184520469E-008, 4.016494478761862E-008, 3.714336291884817E-008,
+      3.456467431097610E-008, 3.197638373267156E-008, 2.977396429941004E-008,
+      2.796450141155672E-008, 2.653968766582020E-008, 2.579458789447440E-008,
+      2.546605203109397E-008, 2.545140529140388E-008, 2.575190396053083E-008,
+      2.623709834365264E-008, 2.768938648502686E-008, 2.854344012036984E-008,
+      2.894655155564769E-008, 3.145103985245693E-008, 3.128565207702224E-008,
+      2.984468505604054E-008, 2.927823611919599E-008, 2.675583382687196E-008,
+      2.413811414770840E-008, 2.591614658715669E-008, 2.411890746204235E-008,
+      2.078811582301456E-008, 1.839650358842652E-008, 1.763719079358455E-008,
+      1.714174393389272E-008, 1.683586345487497E-008, 1.657682462908475E-008,
+      1.639451269965694E-008, 1.626717693247950E-008, 1.618089894920760E-008,
+      1.612955789438989E-008, 1.611265597391871E-008, 1.613239646742105E-008,
+      1.618772560549300E-008, 1.626778997919996E-008, 1.634920729255792E-008,
+      1.640405916675698E-008, 1.644778390987963E-008, 1.649085707321649E-008,
+      1.653026246441299E-008, 1.655723882106256E-008, 1.657010079956148E-008};
+
   // loop over atmosphere columns and compute aerosol microphyscs
   Kokkos::parallel_for(
       policy, KOKKOS_LAMBDA(const ThreadTeam &team) {
@@ -1025,6 +1108,8 @@ void MAMMicrophysics::run_impl(const double dt) {
                 }
               }
 
+              mam_coupling::vmr2mmr(vmrcw, adv_mass_kg_per_moles, qqcw);
+
               //-----------------
               // LINOZ chemistry
               //-----------------
@@ -1034,25 +1119,45 @@ void MAMMicrophysics::run_impl(const double dt) {
               Real do3_linoz, do3_linoz_psc, ss_o3, o3col_du_diag,
                   o3clim_linoz_diag, zenith_angle_degrees;
 
-              int o3_ndx = 0;  // index of "O3" in solsym array (in EAM)
+              // index of "O3" in solsym array (in EAM)
+              constexpr int o3_ndx = static_cast<int>(mam4::GasId::O3);
               mam4::lin_strat_chem::lin_strat_chem_solve_kk(
+                  // in
                   o3_col_dens_i(kk), temp, zenith_angle(icol), pmid, dt, rlats,
                   linoz_o3_clim(icol, kk), linoz_t_clim(icol, kk),
                   linoz_o3col_clim(icol, kk), linoz_PmL_clim(icol, kk),
                   linoz_dPmL_dO3(icol, kk), linoz_dPmL_dT(icol, kk),
                   linoz_dPmL_dO3col(icol, kk), linoz_cariolle_pscs(icol, kk),
-                  chlorine_loading, config.linoz.psc_T, vmr[o3_ndx], do3_linoz,
-                  do3_linoz_psc, ss_o3, o3col_du_diag, o3clim_linoz_diag,
-                  zenith_angle_degrees);
+                  chlorine_loading, config.linoz.psc_T,
+                  // out
+                  vmr[o3_ndx],
+                  // outputs that are not used
+                  do3_linoz, do3_linoz_psc, ss_o3, o3col_du_diag,
+                  o3clim_linoz_diag, zenith_angle_degrees);
 
-              // update source terms above the ozone decay threshold
-              /*if (kk > nlev - config.linoz.o3_lbl - 1) {
-                Real do3_mass; // diagnostic, not needed
-                mam4::lin_strat_chem::lin_strat_sfcsink_kk(dt, pdel,
-              vmr[o3_ndx], config.linoz.o3_sfc, config.linoz.o3_tau, do3_mass);
-              }*/
+              printf("vmr vs. vmr hard:%e, %e,%i\n", vmr[o3_ndx],
+                     vmr_hardwired1[kk], kk);
 
-              // ... check for negative values and reset to zero
+              constexpr int o3_lbl = 4;
+              if(kk >= nlev - o3_lbl) {
+                // update source terms above the ozone decay threshold
+                // FIXME: move o3_tau to namelist
+                constexpr Real o3_tau = 172800.000000000;
+                constexpr Real o3_sfc = 3.000000000000000E-008;
+                Real o3l_vmr, do3mass;
+                o3l_vmr = vmr[o3_ndx];
+                // get new value of O3 vmr
+                o3l_vmr =
+                    mam4::lin_strat_chem::lin_strat_sfcsink_kk(dt, pdel,  // in
+                                                               o3l_vmr,   // out
+                                                               o3_sfc,    // in
+                                                               o3_tau,    // in
+                                                               do3mass);  // out
+                // Update the mixing ratio (vmr) for O3
+                vmr[o3_ndx] = o3l_vmr;
+              }
+
+              // Check for negative values and reset to zero
               for(int i = 0; i < gas_pcnst; ++i) {
                 if(vmr[i] < 0.0) vmr[i] = 0.0;
               }
@@ -1065,7 +1170,6 @@ void MAMMicrophysics::run_impl(const double dt) {
               // mam4::drydep::drydep_xactive(...);
 
               mam_coupling::vmr2mmr(vmr, adv_mass_kg_per_moles, qq);
-              mam_coupling::vmr2mmr(vmrcw, adv_mass_kg_per_moles, qqcw);
 
               for(int i = offset_aerosol; i < pcnst; ++i) {
                 state_q[i]    = qq[i - offset_aerosol];
