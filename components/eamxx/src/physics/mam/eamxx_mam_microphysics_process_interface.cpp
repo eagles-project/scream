@@ -137,6 +137,9 @@ void MAMMicrophysics::set_grids(
   FieldLayout scalar3d_mid_nmodes =
       grid_->get_3d_vector_layout(true, nmodes, "nmodes");
 
+  FieldLayout vector3d_layout_mid =
+      grid_->get_3d_vector_layout(true,2);
+
   static constexpr auto m3 = m * m * m;
   // Aerosol dry particle diameter [m]
   add_field<Required>("dgnum", scalar3d_mid_nmodes, m, grid_name);
@@ -177,6 +180,8 @@ void MAMMicrophysics::set_grids(
                       grid_name);  // surface shortwave, direct
   add_field<Required>("snow_depth_land", scalar2d_layout_col, m,
                       grid_name);  // snow depth land
+  add_field<Required>("horiz_winds", vector3d_layout_mid, m/s,
+                      grid_name);
 
   // droplet activation can alter cloud liquid and number mixing ratios
   add_field<Updated>("qc", scalar3d_layout_mid, kg / kg, grid_name,
@@ -493,6 +498,9 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   // get snow depth land
   snow_depth_land_ = get_field_in("snow_depth_land").get_view<const Real *>();
 
+  // get horizontal winds
+  horiz_winds_ = get_field_in("horiz_winds").get_view<const Real ***>();
+
   // perform any initialization work
   if(run_type == RunType::Initial) {
   }
@@ -757,6 +765,7 @@ void MAMMicrophysics::run_impl(const double dt) {
   const_view_1d &d_sfc_alb_dir_vis = d_sfc_alb_dir_vis_;
   const_view_1d &d_sfc_flux_dir_vis = d_sfc_flux_dir_vis_;
   const_view_1d &snow_depth_land = snow_depth_land_;
+  const_view_3d &horiz_winds = horiz_winds_;
 
   mam_coupling::DryAtmosphere &dry_atm = dry_atm_;
   mam_coupling::AerosolState &dry_aero = dry_aero_;
@@ -874,6 +883,9 @@ void MAMMicrophysics::run_impl(const double dt) {
         auto dry_diameter_icol =
             ekat::subview(dry_geometric_mean_diameter_i, icol);
         auto wetdens_icol = ekat::subview(wetdens, icol);
+
+        const auto horiz_winds_u_icol = ekat::subview(horiz_winds, icol, 0);
+        const auto horiz_winds_v_icol = ekat::subview(horiz_winds, icol, 1);
 
         // fetch column-specific subviews into aerosol prognostics
         mam4::Prognostics progs =
@@ -1082,23 +1094,27 @@ void MAMMicrophysics::run_impl(const double dt) {
               //----------------------
               // Dry deposition (gas)
               //----------------------
-              if ( k == nlev ) {
-                Real fraction_landuse[mam4::seq_drydep::NLUse] = {};
-                int col_index_season[mam4::seq_drydep::NLUse] = {};
+              if ( kk == nlev ) {
+                Real fraction_landuse[mam4::seq_drydep::NLUse] = { 0.0, 0.0, 0.0, 0.0, 0.0, 
+                                                                   0.0, 1.0, 0.0, 0.0, 0.0, 0.0};
+                int col_index_season[mam4::seq_drydep::NLUse] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
                
                 Real dvel[gas_pcnst] = {};
                 Real dflx[gas_pcnst] = {};    
 
-              //mam4::drydep::drydep_xactive(gas_drydep_data, 
-              //                             fraction_landuse,
-              //                             ncdate,
-              //                             col_index_season,
-              //                             temp, temp, temp, 
-              //                             atm.interface_pressure(nlev+1), pmid, qv,
-              //                             rain, 
-              //                             snow_depth_land(icol),
-              //                             d_sfc_flux_dir_vis(icol), 
-              //                             vmr, dvel, dflx);
+                int ncdate = 20100101;
+                Real sfc_temp = temp - 0.2;
+                Real tv = temp*(1.0+qv);
+               
+                Real rain = 0.0;
+                Real wind_speed = haero::sqrt(horiz_winds_u_icol(kk)*horiz_winds_u_icol(kk) +
+                                              horiz_winds_v_icol(kk)*horiz_winds_v_icol(kk));
+
+                mam4::mo_drydep::drydep_xactive(gas_drydep_data, 
+                    fraction_landuse, ncdate, col_index_season,
+                    sfc_temp, temp, tv, atm.interface_pressure(nlev+1), 
+                    pmid, qv, wind_speed, rain, snow_depth_land(icol),
+                    d_sfc_flux_dir_vis(icol), vmr, dvel, dflx);
               }
 
               mam_coupling::vmr2mmr(vmr, adv_mass_kg_per_moles, qq);
