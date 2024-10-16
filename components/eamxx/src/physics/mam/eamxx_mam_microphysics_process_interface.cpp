@@ -865,6 +865,7 @@ void MAMMicrophysics::run_impl(const double dt) {
   }
 
   auto gas_drydep_data = mam4::seq_drydep::set_gas_drydep_data();
+  auto curr_month = timestamp().get_month();
 
   // loop over atmosphere columns and compute aerosol microphyscs
   Kokkos::parallel_for(
@@ -1106,10 +1107,10 @@ void MAMMicrophysics::run_impl(const double dt) {
                                                                    0.0, 1.0, 0.0, 0.0, 0.0, 0.0};
                 int col_index_season[mam4::seq_drydep::NLUse] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
                
-                Real dvel[gas_pcnst] = {};
-                Real dflx[gas_pcnst] = {};    
+                Real dvel[gas_pcnst] = {0.0};
+                Real dflx[gas_pcnst] = {0.0};    
 
-                int ncdate = 20100101;
+                //auto curr_month = timestamp().get_month();
                 Real tv = temp*(1.0+qv);  
                
                 Real rain = 0.0;
@@ -1117,7 +1118,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                                               horiz_winds_v_icol(kk)*horiz_winds_v_icol(kk));
 
                 mam4::mo_drydep::drydep_xactive(gas_drydep_data, 
-                    fraction_landuse, ncdate, col_index_season,
+                    fraction_landuse, curr_month, col_index_season,
                     surf_radiative_T(icol), temp, tv, atm.interface_pressure(nlev+1), 
                     pmid, qv, wind_speed, rain, snow_depth_land(icol),
                     d_sfc_flux_dir_vis(icol), vmr, dvel, dflx);
