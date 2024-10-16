@@ -246,6 +246,9 @@ private_except_cuda:
   // horizontal winds
   const_view_3d horiz_winds_;
 
+  // surface temperature
+  const_view_1d surf_radiative_T_;
+
   // time step number
   int step_;
 

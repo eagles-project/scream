@@ -182,6 +182,8 @@ void MAMMicrophysics::set_grids(
                       grid_name);  // snow depth land
   add_field<Required>("horiz_winds", vector3d_layout_mid, m/s,
                       grid_name);
+  add_field<Required>("surf_radiative_T", scalar2d_layout_col, K, 
+                      grid_name);  // surface temperature
 
   // droplet activation can alter cloud liquid and number mixing ratios
   add_field<Updated>("qc", scalar3d_layout_mid, kg / kg, grid_name,
@@ -501,6 +503,9 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   // get horizontal winds
   horiz_winds_ = get_field_in("horiz_winds").get_view<const Real ***>();
 
+  // get surface temperature
+  surf_radiative_T_ = get_field_in("surf_radiative_T").get_view<const Real *>();
+
   // perform any initialization work
   if(run_type == RunType::Initial) {
   }
@@ -766,6 +771,7 @@ void MAMMicrophysics::run_impl(const double dt) {
   const_view_1d &d_sfc_flux_dir_vis = d_sfc_flux_dir_vis_;
   const_view_1d &snow_depth_land = snow_depth_land_;
   const_view_3d &horiz_winds = horiz_winds_;
+  const_view_1d &surf_radiative_T = surf_radiative_T_;
 
   mam_coupling::DryAtmosphere &dry_atm = dry_atm_;
   mam_coupling::AerosolState &dry_aero = dry_aero_;
@@ -1095,6 +1101,7 @@ void MAMMicrophysics::run_impl(const double dt) {
               // Dry deposition (gas)
               //----------------------
               if ( kk == nlev ) {
+                // FIXME need to get values from read in file
                 Real fraction_landuse[mam4::seq_drydep::NLUse] = { 0.0, 0.0, 0.0, 0.0, 0.0, 
                                                                    0.0, 1.0, 0.0, 0.0, 0.0, 0.0};
                 int col_index_season[mam4::seq_drydep::NLUse] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
@@ -1103,8 +1110,7 @@ void MAMMicrophysics::run_impl(const double dt) {
                 Real dflx[gas_pcnst] = {};    
 
                 int ncdate = 20100101;
-                Real sfc_temp = temp - 0.2;
-                Real tv = temp*(1.0+qv);
+                Real tv = temp*(1.0+qv);  
                
                 Real rain = 0.0;
                 Real wind_speed = haero::sqrt(horiz_winds_u_icol(kk)*horiz_winds_u_icol(kk) +
@@ -1112,7 +1118,7 @@ void MAMMicrophysics::run_impl(const double dt) {
 
                 mam4::mo_drydep::drydep_xactive(gas_drydep_data, 
                     fraction_landuse, ncdate, col_index_season,
-                    sfc_temp, temp, tv, atm.interface_pressure(nlev+1), 
+                    surf_radiative_T(icol), temp, tv, atm.interface_pressure(nlev+1), 
                     pmid, qv, wind_speed, rain, snow_depth_land(icol),
                     d_sfc_flux_dir_vis(icol), vmr, dvel, dflx);
               }
