@@ -249,6 +249,9 @@ private_except_cuda:
   // surface temperature
   const_view_1d surf_radiative_T_;
 
+  // Constituent fluxes of species in [kg/m2/s]
+  view_2d constituent_fluxes_;
+
   // time step number
   int step_;
 

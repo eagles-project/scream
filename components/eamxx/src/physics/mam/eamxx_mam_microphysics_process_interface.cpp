@@ -115,6 +115,7 @@ void MAMMicrophysics::set_grids(
 
   ncol_ = grid_->get_num_local_dofs();       // number of columns on this rank
   nlev_ = grid_->get_num_vertical_levels();  // number of levels per column
+  constexpr int pcnst   = mam4::pcnst;
 
   // get column geometry and locations
   col_areas_      = grid_->get_geometry_data("area").get_view<const Real *>();
@@ -126,6 +127,10 @@ void MAMMicrophysics::set_grids(
 
   // layout for 2D (1d horiz X 1d vertical) variable
   FieldLayout scalar2d_layout_col{{COL}, {ncol_}};
+
+  // layout for Constituent fluxes
+  FieldLayout scalar2d_layout_pcnst =
+      grid_->get_2d_vector_layout(pcnst, "num_phys_constituents");
 
   // layout for 3D (2d horiz X 1d vertical) variables
   FieldLayout scalar3d_layout_mid{{COL, LEV}, {ncol_, nlev_}};
@@ -184,6 +189,10 @@ void MAMMicrophysics::set_grids(
                       grid_name);
   add_field<Required>("surf_radiative_T", scalar2d_layout_col, K, 
                       grid_name);  // surface temperature
+  
+  // Constituent fluxes of species in [kg/m2/s]
+  add_field<Updated>("constituent_fluxes", scalar2d_layout_pcnst, kg / m2 / s,
+                      grid_name);
 
   // droplet activation can alter cloud liquid and number mixing ratios
   add_field<Updated>("qc", scalar3d_layout_mid, kg / kg, grid_name,
@@ -506,6 +515,9 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   // get surface temperature
   surf_radiative_T_ = get_field_in("surf_radiative_T").get_view<const Real *>();
 
+  // Constituent fluxes of species in [kg/m2/s]
+  constituent_fluxes_ = get_field_out("constituent_fluxes").get_view<Real **>();
+
   // perform any initialization work
   if(run_type == RunType::Initial) {
   }
@@ -786,6 +798,7 @@ void MAMMicrophysics::run_impl(const double dt) {
 
   const auto &invariants   = invariants_;
   const auto &cnst_offline = cnst_offline_;
+  auto &constituent_fluxes = constituent_fluxes_;
 
   // Compute orbital parameters; these are used both for computing
   // the solar zenith angle.
@@ -1122,6 +1135,11 @@ void MAMMicrophysics::run_impl(const double dt) {
                     surf_radiative_T(icol), temp, tv, atm.interface_pressure(nlev+1), 
                     pmid, qv, wind_speed, rain, snow_depth_land(icol),
                     d_sfc_flux_dir_vis(icol), vmr, dvel, dflx);
+
+                for(int i = offset_aerosol; i < pcnst; ++i) {
+                  constituent_fluxes(icol, i) = constituent_fluxes(icol, i) -
+                                                dflx[i - offset_aerosol];
+                }
               }
 
               mam_coupling::vmr2mmr(vmr, adv_mass_kg_per_moles, qq);
