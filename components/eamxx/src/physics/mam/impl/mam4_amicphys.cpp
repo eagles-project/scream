@@ -823,17 +823,65 @@ void mam_amicphys_1subarea_clear(
       Real dnh4dt_ait = 0;
       Nucleation nucleation;
       Nucleation::Config config;
-      config.dens_so4a_host = 1770;
+      // config.dens_so4a_host = 1770;
       config.mw_nh4a_host = 115;
       config.mw_so4a_host = 115;
-      config.accom_coef_h2so4 = 0.65;
+      // config.accom_coef_h2so4 = 0.65;
       AeroConfig aero_config;
       nucleation.init(aero_config, config);
+      compute_tendencies_(
+                          // Real deltat,
+                          // Real temp_in,
+                          // Real press_in,
+                          // Real zm_in,
+                          // Real pblh_in,
+                          // Real relhum,
+                          // Real uptkrate_h2so4,
+                          const int nsize, // missing?
+                          const Real dp_lo_mode,
+                          const Real dp_hi_mode,
+                          // const Real qgas_cur[num_gases],
+                          // const Real qgas_avg[num_gases],
+                          int &isize_nuc,
+                          // Real &qnuma_del,
+                          // Real &qso4a_del,
+                          // Real &qnh4a_del,
+                          // Real &qh2so4_del,
+                          Real &qnh3_del,
+                          // Real &dnclusterdt
+                          )
+      // nucleation.compute_tendencies_(
+      //     dtsubstep, temp, pmid, aircon, zmid, pblh, relhum, uptkrate_h2so4,
+      //     del_h2so4_gasprod, del_h2so4_aeruptk, qgas_cur, qgas_avg, qnum_cur,
+      //     qaer_cur_tmp, qwtr_cur, dndt_ait, dmdt_ait, dso4dt_ait, dnh4dt_ait,
+      //     dnclusterdt_substep);
       nucleation.compute_tendencies_(
-          dtsubstep, temp, pmid, aircon, zmid, pblh, relhum, uptkrate_h2so4,
-          del_h2so4_gasprod, del_h2so4_aeruptk, qgas_cur, qgas_avg, qnum_cur,
-          qaer_cur_tmp, qwtr_cur, dndt_ait, dmdt_ait, dso4dt_ait, dnh4dt_ait,
-          dnclusterdt_substep);
+          dtsubstep, // deltat
+          temp, // temp_in
+          pmid, // press_in
+          aircon, // ?
+          zmid, // zm_in
+          pblh, // pblh_in
+          relhum, // relhum
+          uptkrate_h2so4, // uptkrate_h2so4
+          // nsize?
+          // dp_lo_mode?
+          // dp_hi_mode?
+          del_h2so4_aeruptk, // uptkrate_h2so4?
+          qgas_cur, // qgas_cur[num_gases]?
+          qgas_avg, // qgas_avg[num_gases]?
+          // isize_nuc?
+          qnum_cur, // qnuma_del?
+          qaer_cur_tmp, // ?
+          qwtr_cur, // ?
+          dndt_ait, //
+          dmdt_ait, //
+          dso4dt_ait, // qso4a_del
+          dnh4dt_ait, // qnh4a_del
+          del_h2so4_gasprod, // qh2so4_del?
+          // qnh3_del?
+          dnclusterdt_substep // dnclusterdt
+          );
       for (int j = 0; j < num_aerosol_ids; ++j)
         for (int i = 0; i < num_modes; ++i)
           qaer_cur[j][i] = qaer_cur_tmp[i][j];
