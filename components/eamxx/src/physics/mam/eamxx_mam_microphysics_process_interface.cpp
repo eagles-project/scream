@@ -51,12 +51,12 @@ void MAMMicrophysics::set_defaults_() {
   config_.amicphys.do_coag = true;
 
   config_.amicphys.nucleation = {};
-  config_.amicphys.nucleation.dens_so4a_host = 1770.0;
-  config_.amicphys.nucleation.mw_so4a_host = 115.0;
-  config_.amicphys.nucleation.newnuc_method_user_choice = 2;
-  config_.amicphys.nucleation.pbl_nuc_wang2008_user_choice = 1;
-  config_.amicphys.nucleation.adjust_factor_pbl_ratenucl = 1.0;
-  config_.amicphys.nucleation.accom_coef_h2so4 = 1.0;
+  // config_.amicphys.nucleation.dens_so4a_host = 1770.0;
+  // config_.amicphys.nucleation.mw_so4a_host = 115.0;
+  // config_.amicphys.nucleation.newnuc_method_user_choice = 2;
+  // config_.amicphys.nucleation.pbl_nuc_wang2008_user_choice = 1;
+  // config_.amicphys.nucleation.adjust_factor_pbl_ratenucl = 1.0;
+  // config_.amicphys.nucleation.accom_coef_h2so4 = 1.0;
   config_.amicphys.nucleation.newnuc_adjust_factor_dnaitdt = 1.0;
 
   // these parameters guide the coupling between parameterizations
@@ -201,7 +201,7 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   wet_atm_.nc = get_field_out("nc").get_view<Real**>();
   wet_atm_.qi = get_field_in("qi").get_view<const Real**>();
   wet_atm_.ni = get_field_in("ni").get_view<const Real**>();
-  
+
 
   dry_atm_.T_mid     = get_field_in("T_mid").get_view<const Real**>();
   dry_atm_.p_mid     = get_field_in("p_mid").get_view<const Real**>();
