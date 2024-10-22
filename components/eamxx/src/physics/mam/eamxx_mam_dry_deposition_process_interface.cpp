@@ -222,7 +222,7 @@ void MAMDryDep::set_grids(
       ncol_, field_name, dim_name1, dim_name2, grid_, frac_landuse_data_file,
       mapping_file,
       // output
-      horizInterp_, frac_landuse_, dataReader_);
+      horizInterp_, dataReader_);
 
 }  // set_grids
 
@@ -432,11 +432,12 @@ void MAMDryDep::run_impl(const double dt) {
   auto aerdepdryis_ = get_field_out("deposition_flux_of_interstitial_aerosols")
                           .get_view<Real **>();
 
-  // Get fractional land use data from the file data structure
-  const const_view_2d frac_landuse = frac_landuse_.data.frac_land_use;
+  // Get fractional land use data
+  const const_view_2d frac_landuse = frac_landuse_;
   //--------------------------------------------------------------------
   // Call drydeposition and get tendencies
   //--------------------------------------------------------------------
+  printf("BALLI:%0.15e",frac_landuse_(0,1));
   compute_tendencies(ncol_, nlev_, dt, obukhov_length_,
                      surface_friction_velocty_, land_fraction_, ice_fraction_,
                      ocean_fraction_, friction_velocity_,

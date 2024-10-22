@@ -91,7 +91,8 @@ std::shared_ptr<AtmosphereInput> fracLandUseFunctions<S, D>::create_data_reader(
 template <typename S, typename D>
 void fracLandUseFunctions<S, D>::update_frac_land_use_data_from_file(
     std::shared_ptr<AtmosphereInput> &scorpio_reader,
-    AbstractRemapper &horiz_interp, FracLandUseInput &input) {
+    //AbstractRemapper &horiz_interp, FracLandUseData &input) {
+    AbstractRemapper &horiz_interp,  const view_2d &input) {
   using namespace ShortFieldTagsNames;
   using ESU    = ekat::ExeSpaceUtils<typename DefaultDevice::execution_space>;
   using Member = typename KokkosTypes<DefaultDevice>::MemberType;
@@ -119,11 +120,7 @@ void fracLandUseFunctions<S, D>::update_frac_land_use_data_from_file(
       "EAMxx::FracLandUse::update_frac_land_use_data_from_file::copy_and_pad");
   // Recall, the fields are registered in the order:
   // Read the field from the file
-  const auto field_from_file =
-      horiz_interp.get_tgt_field(0).get_view<const Real **>();
-  // copy data to the input view
-  Kokkos::deep_copy(input.data.frac_land_use, field_from_file);
-  Kokkos::fence();
+  input =  horiz_interp.get_tgt_field(0).get_view<const Real **>();
   stop_timer(
       "EAMxx::FracLandUse::update_frac_land_use_data_from_file::copy_and_pad");
 
@@ -142,17 +139,10 @@ void fracLandUseFunctions<S, D>::init_frac_landuse_file_read(
     const std::string &data_file, const std::string &mapping_file,
     // output
     std::shared_ptr<AbstractRemapper> &FracLandUseHorizInterp,
-    FracLandUseInput &FracLandUseData_data,
     std::shared_ptr<AtmosphereInput> &FracLandUseDataReader) {
   // Init horizontal remap
   FracLandUseHorizInterp = create_horiz_remapper(
       grid, data_file, mapping_file, field_name, dim_name1, dim_name2);
-
-  // number of fractional land use classes
-  const int nclass = scorpio::get_dimlen(data_file, dim_name2);
-
-  // Initialize the size of start/end/out data structures
-  FracLandUseData_data = FracLandUseInput(ncol, nclass);
 
   // Create reader (an AtmosphereInput object)
   FracLandUseDataReader = create_data_reader(FracLandUseHorizInterp, data_file);
