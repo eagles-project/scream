@@ -13,6 +13,7 @@ struct fracLandUseFunctions {
 
   using KT      = KokkosTypes<Device>;
   using view_2d = typename KT::template view_2d<Real>;
+  using const_view_2d = typename KT::template view_2d<const Real>;
 
   // -------------------------------------------------------------------------------------------
   // -------------------------------------------------------------------------------------------
@@ -37,7 +38,7 @@ struct fracLandUseFunctions {
   static void update_frac_land_use_data_from_file(
       std::shared_ptr<AtmosphereInput> &scorpio_reader,
       //AbstractRemapper &horiz_interp, FracLandUseData &input);
-      AbstractRemapper &horiz_interp,  const view_2d &input);
+      AbstractRemapper &horiz_interp,  const_view_2d &input);
 
   // -------------------------------------------------------------------------------------------
   // -------------------------------------------------------------------------------------------

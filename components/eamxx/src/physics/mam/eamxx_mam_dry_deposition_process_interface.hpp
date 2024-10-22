@@ -110,7 +110,7 @@ class MAMDryDep final : public scream::AtmosphereProcess {
   // For reading fractional land use file
   std::shared_ptr<AbstractRemapper> horizInterp_;
   std::shared_ptr<AtmosphereInput> dataReader_;
-  view_2d frac_landuse_;
+  const_view_2d frac_landuse_;
 
  public:
   using KT = ekat::KokkosTypes<DefaultDevice>;
