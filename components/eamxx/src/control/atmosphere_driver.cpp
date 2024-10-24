@@ -248,7 +248,9 @@ void AtmosphereDriver::create_atm_processes()
     // First, add all atm processes
     dag.init_atm_proc_nodes(*m_atm_process_group);
     // Write a dot file for visualization
-    dag.write_dag("createProc_dag.dot", std::max(verb_lvl, 0));
+    if (m_atm_comm.am_i_root()) {
+      dag.write_dag("createProc_dag.dot", std::max(verb_lvl, 0));
+    }
   }
 }
 
@@ -709,7 +711,9 @@ void AtmosphereDriver::create_fields()
     dag.create_dag(*m_atm_process_group);
 
     // Write a dot file for visualization
-    dag.write_dag("createField_dag.dot", std::max(verb_lvl,0));
+    if (m_atm_comm.am_i_root()) {
+      dag.write_dag("createField_dag.dot", std::max(verb_lvl,0));
+    }
   }
 
   m_ad_status |= s_fields_created;
@@ -905,7 +909,9 @@ initialize_fields ()
     // process the initial conditions to maybe fulfill unmet dependencies
     dag.process_IC_alt(m_fields_inited);
     // Write a dot file for visualization
-    dag.write_dag("initField_dag.dot", std::max(verb_lvl,0));
+    if (m_atm_comm.am_i_root()) {
+      dag.write_dag("initField_dag.dot", std::max(verb_lvl,0));
+    }
   }
 
   // Initialize fields
@@ -1666,7 +1672,9 @@ void AtmosphereDriver::initialize_atm_procs ()
     // process the initial conditions to maybe fulfill unmet dependencies
     dag.process_IC_alt(m_fields_inited);
     // Write a dot file for visualization
-    dag.write_dag("initProc_dag.dot", std::max(verb_lvl,0));
+    if (m_atm_comm.am_i_root()) {
+      dag.write_dag("initProc_dag.dot", std::max(verb_lvl,0));
+    }
   }
 }
 

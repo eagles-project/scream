@@ -202,8 +202,6 @@ void AtmProcDAG::write_dag (const std::string& fname, const int verbosity) const
       id_end = n.id;
       box_fmt = "  color=\"#88621e\"\n  fontcolor=\"#88621e\"\n  style=filled\n"
                 "  fillcolor=\"#dccfb9\"\n";
-    } else {
-      box_fmt = "penwidth=4\n fontsize=30";
     }
 
     // Write node, with computed/required fields
@@ -216,12 +214,12 @@ void AtmProcDAG::write_dag (const std::string& fname, const int verbosity) const
           << "  label=<\n"
           << "    <table border=\"0\">\n"
           << "      <tr><td><b><font point-size=\"40\">" << html_fix(n.name)
-          << "</font></b></td></tr>";
+          << "</font></b></td></tr>\n";
     if (verbosity>1) {
       // FieldIntentifier prints bare min with verb 0.
       // DAG starts printing fids with verb 2, so fid verb is verb-2;
       int fid_verb = verbosity-2;
-      ofile << "<hr/>\n";
+      ofile << "      <hr/>\n";
 
       // Computed fields
       if (n.id == id_begin) {
