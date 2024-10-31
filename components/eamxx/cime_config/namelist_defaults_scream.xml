@@ -318,6 +318,11 @@ be lost if SCREAM_HACK_XML is not enabled.
       <!-- Soil erodibility ne4 grid-->
       <soil_erodibility_file hgrid="ne4np4.pg2" type="file" doc="File containing soil erodibility">${DIN_LOC_ROOT}/atm/scream/mam4xx/emissions/dst_ne4pg2_c20241028.nc</soil_erodibility_file>
 
+      <!-- Marine organics file -->
+      <marine_organics_file type="file" doc="File containing marine organics emissions">${DIN_LOC_ROOT}/atm/scream/mam4xx/emissions/ne30pg2/monthly_macromolecules_0.1deg_bilinear_year01_merge_ne30pg2_c20241030.nc</marine_organics_file>
+      <!-- Marine organics file ne4 grid -->
+      <marine_organics_file hgrid="ne4np4.pg2" type="file" doc="File containing marine organics emissions">${DIN_LOC_ROOT}/atm/scream/mam4xx/emissions/ne4pg2/monthly_macromolecules_0.1deg_bilinear_year01_merge_ne4pg2_c20241030.nc</marine_organics_file>
+
       <!-- Mapping Files for finer resolutions -->
       <srf_remap_file type="file" doc="File containing mapping data from the grid of emission files to the model grid. Unused if the grid is the same."/>
       <srf_remap_file hgrid="ne120np4.pg2">${DIN_LOC_ROOT}/atm/scream/maps/map_ne30pg2_to_ne120pg2_20231201.nc</srf_remap_file>
