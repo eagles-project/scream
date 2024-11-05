@@ -221,52 +221,56 @@ void AtmProcDAG::write_dag (const std::string& fname, const int verbosity) const
       int fid_verb = verbosity-2;
       ofile << "      <hr/>\n";
 
-      // Computed fields
-      if (n.id == id_begin) {
-        ofile << "      <tr><td align=\"left\"><b><font color=\"#00667E\">"
-              << "Atm input fields from previous time step:</font></b></td></tr>\n";
-      } else if (n.id == id_IC) {
-        ofile << "      <tr><td align=\"left\"><b><font color=\"#00667E\">"
-              << "Initial Fields:</font></b></td></tr>\n";
-      } else if (n.id != id_end) {
-        ofile << "      <tr><td align=\"left\"><b><font color=\"#88621e\">"
-              << "Computed Fields:</font></b></td></tr>\n";
-      }
+      if (n.computed.size() > 0) {
+        // Computed fields
+        if (n.id == id_begin) {
+          ofile << "      <tr><td align=\"left\"><b><font color=\"#00667E\">"
+                << "Atm input fields from previous time step:</font></b></td></tr>\n";
+        } else if (n.id == id_IC) {
+          ofile << "      <tr><td align=\"left\"><b><font color=\"#00667E\">"
+                << "Initial Fields:</font></b></td></tr>\n";
+        } else if (n.id != id_end) {
+          ofile << "      <tr><td align=\"left\"><b><font color=\"#88621e\">"
+                << "Computed Fields:</font></b></td></tr>\n";
+        }
 
-      for (const auto& fid : n.computed) {
-        std::string fc = "<font color=\"";
-        fc += "black";
-        fc += "\">  ";
-        ofile << "      <tr><td align=\"left\">" << fc
-              << html_fix(print_fid(m_fids[fid],fid_verb))
-              << "</font></td></tr>\n";
-      }
-
-      // Required fields
-      if (n.id == id_end) {
-        ofile << "      <tr><td align=\"left\"><b><font color=\"#88621e\">"
-              << "Atm output fields for next time step:</font></b></td></tr>\n";
-      } else if (n.id != id_begin && n.id != id_IC) {
-        ofile << "      <tr><td align=\"left\"><b><font color=\"#00667E\">"
-              << "Required Fields:</font></b></td></tr>\n";
-      }
-      for (const auto& fid : n.required) {
-        std::string fc = "<font color=\"";
-        if (ekat::contains(unmet, fid)) {
-          fc += "red";
-        } else if (ekat::contains(unmet, -fid)) {
-          fc +=  "#006219";
-        } else {
+        for (const auto& fid : n.computed) {
+          std::string fc = "<font color=\"";
           fc += "black";
+          fc += "\">  ";
+          ofile << "      <tr><td align=\"left\">" << fc
+                << html_fix(print_fid(m_fids[fid],fid_verb))
+                << "</font></td></tr>\n";
         }
-        fc += "\">  ";
-        ofile << "      <tr><td align=\"left\">" << fc << html_fix(print_fid(m_fids[fid],fid_verb));
-        if (ekat::contains(m_unmet_deps.at(n.id), fid)) {
-          ofile << "<b>  *** MISSING ***</b>";
-        } else if (ekat::contains(m_unmet_deps.at(n.id), -fid)) {
-          ofile << "<b>  (Init. Cond.)</b>";
+      }
+
+      if (n.required.size() > 0) {
+        // Required fields
+        if (n.id == id_end) {
+          ofile << "      <tr><td align=\"left\"><b><font color=\"#88621e\">"
+                << "Atm output fields for next time step:</font></b></td></tr>\n";
+        } else if (n.id != id_begin && n.id != id_IC) {
+          ofile << "      <tr><td align=\"left\"><b><font color=\"#00667E\">"
+                << "Required Fields:</font></b></td></tr>\n";
         }
-        ofile << "</font></td></tr>\n";
+        for (const auto& fid : n.required) {
+          std::string fc = "<font color=\"";
+          if (ekat::contains(unmet, fid)) {
+            fc += "red";
+          } else if (ekat::contains(unmet, -fid)) {
+            fc +=  "#006219";
+          } else {
+            fc += "black";
+          }
+          fc += "\">  ";
+          ofile << "      <tr><td align=\"left\">" << fc << html_fix(print_fid(m_fids[fid],fid_verb));
+          if (ekat::contains(m_unmet_deps.at(n.id), fid)) {
+            ofile << "<b>  *** MISSING ***</b>";
+          } else if (ekat::contains(m_unmet_deps.at(n.id), -fid)) {
+            ofile << "<b>  (Init. Cond.)</b>";
+          }
+          ofile << "</font></td></tr>\n";
+        }
       }
 
       // Computed groups
