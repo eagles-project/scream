@@ -252,6 +252,10 @@ private_except_cuda:
   // Constituent fluxes of species in [kg/m2/s]
   view_2d constituent_fluxes_;
 
+  // precipitation mass
+  const_view_1d precip_liq_surf_mass_;
+  const_view_1d precip_ice_surf_mass_;
+
   // time step number
   int step_;
 

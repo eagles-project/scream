@@ -189,7 +189,11 @@ void MAMMicrophysics::set_grids(
                       grid_name);
   add_field<Required>("surf_radiative_T", scalar2d_layout_col, K, 
                       grid_name);  // surface temperature
-  
+  add_field<Required>("precip_liq_surf_mass", scalar2d_layout_col, kg / m2,
+                      grid_name);  // precipitation liquid mass  
+  add_field<Required>("precip_ice_surf_mass", scalar2d_layout_col, kg / m2,
+                      grid_name);  // precipitation ice mass
+ 
   // Constituent fluxes of species in [kg/m2/s]
   add_field<Updated>("constituent_fluxes", scalar2d_layout_pcnst, kg / m2 / s,
                       grid_name);
@@ -515,6 +519,10 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   // get surface temperature
   surf_radiative_T_ = get_field_in("surf_radiative_T").get_view<const Real *>();
 
+  // get precipitation mass
+  precip_liq_surf_mass_ = get_field_in("precip_liq_surf_mass").get_view<const Real *>();
+  precip_ice_surf_mass_ = get_field_in("precip_ice_surf_mass").get_view<const Real *>();
+
   // Constituent fluxes of species in [kg/m2/s]
   constituent_fluxes_ = get_field_out("constituent_fluxes").get_view<Real **>();
 
@@ -665,6 +673,8 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
 // ================================================================
 
 void MAMMicrophysics::run_impl(const double dt) {
+  using PC = scream::physics::Constants<Real>;
+
   const auto scan_policy = ekat::ExeSpaceUtils<
       KT::ExeSpace>::get_thread_range_parallel_scan_team_policy(ncol_, nlev_);
   const auto policy =
@@ -784,6 +794,8 @@ void MAMMicrophysics::run_impl(const double dt) {
   const_view_1d &snow_depth_land = snow_depth_land_;
   const_view_3d &horiz_winds = horiz_winds_;
   const_view_1d &surf_radiative_T = surf_radiative_T_;
+  const_view_1d &precip_liq_surf_mass = precip_liq_surf_mass_;
+  const_view_1d &precip_ice_surf_mass = precip_ice_surf_mass_;
 
   mam_coupling::DryAtmosphere &dry_atm = dry_atm_;
   mam_coupling::AerosolState &dry_aero = dry_aero_;
@@ -879,6 +891,22 @@ void MAMMicrophysics::run_impl(const double dt) {
 
   auto gas_drydep_data = mam4::seq_drydep::set_gas_drydep_data();
   auto curr_month = timestamp().get_month();
+  curr_month = 1;
+
+  const auto &t_start_liq = get_field_in("precip_liq_surf_mass").get_header().get_tracking().get_accum_start_time(); 
+  const auto &t_now_liq = get_field_in("precip_liq_surf_mass").get_header().get_tracking().get_time_stamp();
+
+  const auto &t_start_ice = get_field_in("precip_ice_surf_mass").get_header().get_tracking().get_accum_start_time();
+  const auto &t_now_ice = get_field_in("precip_ice_surf_mass").get_header().get_tracking().get_time_stamp();
+
+  std::int64_t dt_precip;
+
+  dt_precip = t_now_ice - t_start_ice;
+
+  //EKAT_REQUIRE_MSG (dt_precip==(t_now_ice-t_start_ice),
+  //        "Error! Liquid and ice precip mass fields have different accumulation time stamps!\n");
+
+  //auto rhodt = PC::RHO_H2O*dt_precip;
 
   // loop over atmosphere columns and compute aerosol microphyscs
   Kokkos::parallel_for(
@@ -1125,16 +1153,21 @@ void MAMMicrophysics::run_impl(const double dt) {
 
                 //auto curr_month = timestamp().get_month();
                 Real tv = temp*(1.0+qv);  
-               
+              
                 Real rain = 0.0;
+                //if (dt_precip != 0) {
+                //  rain = (precip_liq_surf_mass(icol) + 
+                //               precip_ice_surf_mass(icol))/rhodt;
+                //}
+
                 Real wind_speed = haero::sqrt(horiz_winds_u_icol(kk)*horiz_winds_u_icol(kk) +
                                               horiz_winds_v_icol(kk)*horiz_winds_v_icol(kk));
 
-                mam4::mo_drydep::drydep_xactive(gas_drydep_data, 
+                /*mam4::mo_drydep::drydep_xactive(gas_drydep_data, 
                     fraction_landuse, curr_month, col_index_season,
                     surf_radiative_T(icol), temp, tv, atm.interface_pressure(nlev+1), 
                     pmid, qv, wind_speed, rain, snow_depth_land(icol),
-                    d_sfc_flux_dir_vis(icol), vmr, dvel, dflx);
+                    d_sfc_flux_dir_vis(icol), vmr, dvel, dflx);*/
 
                 for(int i = offset_aerosol; i < pcnst; ++i) {
                   constituent_fluxes(icol, i) = constituent_fluxes(icol, i) -
