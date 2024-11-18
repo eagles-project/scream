@@ -22,6 +22,7 @@ class MAMMicrophysics final : public scream::AtmosphereProcess {
   using view_2d       = typename KT::template view_2d<Real>;
   using view_3d       = typename KT::template view_3d<Real>;
   using const_view_1d = typename KT::template view_1d<const Real>;
+  using const_view_3d = typename KT::template view_3d<const Real>;
 
   using view_1d_host = typename KT::view_1d<Real>::HostMirror;
 
@@ -194,6 +195,22 @@ class MAMMicrophysics final : public scream::AtmosphereProcess {
 
   // surface albedo: shortwave, direct
   const_view_1d d_sfc_alb_dir_vis_;
+
+  // surface shortwave, direct
+  const_view_1d d_sfc_flux_dir_vis_;
+
+  // snow depth land
+  const_view_1d snow_depth_land_;
+
+  // horizontal winds
+  const_view_3d horiz_winds_;
+
+  // surface temperature
+  const_view_1d surf_radiative_T_;
+
+  // precipitation mass
+  const_view_1d precip_liq_surf_mass_;
+  const_view_1d precip_ice_surf_mass_;
 
   // workspace manager for internal local variables
   // ekat::WorkspaceManager<Real, KT::Device> workspace_mgr_;

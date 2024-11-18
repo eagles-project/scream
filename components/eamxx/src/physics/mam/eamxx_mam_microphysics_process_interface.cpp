@@ -69,6 +69,9 @@ void MAMMicrophysics::set_grids(
   const FieldLayout scalar3d_mid = grid_->get_3d_scalar_layout(true);
   const FieldLayout scalar3d_int = grid_->get_3d_scalar_layout(false);
 
+  // Layout for horizontal wind u and v
+  const FieldLayout vector3d_mid = grid_->get_3d_vector_layout(true,2);
+
   using namespace ekat::units;
   constexpr auto q_unit = kg / kg;  // units of mass mixing ratios of tracers
   constexpr auto n_unit = 1 / kg;   // units of number mixing ratios of tracers
@@ -113,11 +116,20 @@ void MAMMicrophysics::set_grids(
   // Planetary boundary layer height [m]
   add_field<Required>("pbl_height", scalar2d, m, grid_name);
 
+  // horizontal winds u and v
+  add_field<Required>("horiz_winds", vector3d_mid, m / s, grid_name);
+
   constexpr auto m2 = pow(m, 2);
   constexpr auto s2 = pow(s, 2);
 
   // Surface geopotential [m2/s2]
   add_field<Required>("phis", scalar2d, m2 / s2, grid_name);
+
+  // precipitation liquid mass
+  add_field<Required>("precip_liq_surf_mass", scalar2d, kg / m2, grid_name);  
+
+  // precipitation ice mass
+  add_field<Required>("precip_ice_surf_mass", scalar2d, kg / m2, grid_name);
 
   //----------- Variables from microphysics scheme -------------
   constexpr auto nondim = ekat::units::Units::nondimensional();
@@ -144,6 +156,15 @@ void MAMMicrophysics::set_grids(
   //----------- Variables from coupler (land component)---------
   // surface albedo shortwave, direct
   add_field<Required>("sfc_alb_dir_vis", scalar2d, nondim, grid_name);
+
+  // surface shortwave, direct
+  add_field<Required>("sfc_flux_dir_vis", scalar2d, W / m2, grid_name);
+
+  // snow depth land
+  add_field<Required>("snow_depth_land", scalar2d, m, grid_name);
+
+  // surface temperature
+  add_field<Required>("surf_radiative_T", scalar2d, K, grid_name);
 
   // ---------------------------------------------------------------------
   // These variables are "updated" or inputs/outputs for the process
@@ -412,6 +433,22 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   // get surface albedo: shortwave, direct
   d_sfc_alb_dir_vis_ = get_field_in("sfc_alb_dir_vis").get_view<const Real *>();
 
+  // get surface shortwave, direct
+  d_sfc_flux_dir_vis_ = get_field_in("sfc_flux_dir_vis").get_view<const Real *>();
+
+  // get snow depth land
+  snow_depth_land_ = get_field_in("snow_depth_land").get_view<const Real *>();
+
+  // get surface temperature
+  surf_radiative_T_ = get_field_in("surf_radiative_T").get_view<const Real *>();
+
+  // get precipitation mass
+  precip_liq_surf_mass_ = get_field_in("precip_liq_surf_mass").get_view<const Real *>();
+  precip_ice_surf_mass_ = get_field_in("precip_ice_surf_mass").get_view<const Real *>();
+
+  // get horizontal winds
+  horiz_winds_ = get_field_in("horiz_winds").get_view<const Real ***>();
+
   // interstitial and cloudborne aerosol tracers of interest: mass (q) and
   // number (n) mixing ratios
   for(int m = 0; m < mam_coupling::num_aero_modes(); ++m) {
@@ -636,6 +673,13 @@ void MAMMicrophysics::run_impl(const double dt) {
 
   const_view_1d &col_latitudes     = col_latitudes_;
   const_view_1d &d_sfc_alb_dir_vis = d_sfc_alb_dir_vis_;
+  const_view_1d &d_sfc_flux_dir_vis = d_sfc_flux_dir_vis_;
+  const_view_1d &snow_depth_land = snow_depth_land_;
+  const_view_1d &surf_radiative_T = surf_radiative_T_;
+  const_view_1d &precip_liq_surf_mass = precip_liq_surf_mass_;
+  const_view_1d &precip_ice_surf_mass = precip_ice_surf_mass_;
+
+  const_view_3d &horiz_winds = horiz_winds_;
 
   mam_coupling::DryAtmosphere &dry_atm = dry_atm_;
   mam_coupling::AerosolState &dry_aero = dry_aero_;
