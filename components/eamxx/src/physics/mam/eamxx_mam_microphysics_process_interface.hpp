@@ -212,6 +212,9 @@ class MAMMicrophysics final : public scream::AtmosphereProcess {
   const_view_1d precip_liq_surf_mass_;
   const_view_1d precip_ice_surf_mass_;
 
+  // Constituent fluxes of species in [kg/m2/s]
+  view_2d constituent_fluxes_;
+
   // workspace manager for internal local variables
   // ekat::WorkspaceManager<Real, KT::Device> workspace_mgr_;
   mam_coupling::Buffer buffer_;

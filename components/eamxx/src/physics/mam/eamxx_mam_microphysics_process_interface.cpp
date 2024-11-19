@@ -140,14 +140,25 @@ void MAMMicrophysics::set_grids(
   // Number of modes
   constexpr int nmodes = mam4::AeroConfig::num_modes();
 
+  // Number of species
+  constexpr int pcnst = mam4::pcnst;
+
   // layout for 3D (ncol, nmodes, nlevs)
   FieldLayout scalar3d_mid_nmodes =
       grid_->get_3d_vector_layout(true, nmodes, "nmodes");
+
+  // layout for Constituent fluxes
+  FieldLayout scalar2d_pcnst =
+      grid_->get_2d_vector_layout(pcnst, "num_phys_constituents");
 
   // Geometric mean dry diameter for number distribution [m]
   add_field<Required>("dgnum", scalar3d_mid_nmodes, m, grid_name);
   // Geometric mean wet diameter for number distribution [m]
   add_field<Required>("dgnumwet", scalar3d_mid_nmodes, m, grid_name);
+
+  // Constituent fluxes of species in [kg/m2/s]
+  add_field<Updated>("constituent_fluxes", scalar2d_pcnst, kg / m2 / s,
+                      grid_name);
 
   constexpr auto m3 = pow(m, 3);
   // Wet density of interstitial aerosol [kg/m3]
@@ -449,6 +460,9 @@ void MAMMicrophysics::initialize_impl(const RunType run_type) {
   // get horizontal winds
   horiz_winds_ = get_field_in("horiz_winds").get_view<const Real ***>();
 
+  // get Constituent fluxes of species
+  constituent_fluxes_ = get_field_out("constituent_fluxes").get_view<Real **>();
+
   // interstitial and cloudborne aerosol tracers of interest: mass (q) and
   // number (n) mixing ratios
   for(int m = 0; m < mam_coupling::num_aero_modes(); ++m) {
@@ -680,6 +694,8 @@ void MAMMicrophysics::run_impl(const double dt) {
   const_view_1d &precip_ice_surf_mass = precip_ice_surf_mass_;
 
   const_view_3d &horiz_winds = horiz_winds_;
+
+  auto &constituent_fluxes = constituent_fluxes_;
 
   mam_coupling::DryAtmosphere &dry_atm = dry_atm_;
   mam_coupling::AerosolState &dry_aero = dry_aero_;
