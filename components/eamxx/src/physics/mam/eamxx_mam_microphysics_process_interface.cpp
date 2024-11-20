@@ -835,6 +835,11 @@ void MAMMicrophysics::run_impl(const double dt) {
             ekat::subview(work_photo_table, icol);
 
         const auto &photo_rates_icol = ekat::subview(photo_rates, icol);
+      
+        const auto &constituent_fluxes_icol = ekat::subview(constituent_fluxes, icol);
+
+        const auto &horiz_winds_u_icol = ekat::subview(horiz_winds, icol, 0);
+        const auto &horiz_winds_v_icol = ekat::subview(horiz_winds, icol, 1);
 
         const auto linoz_o3_clim_icol = ekat::subview(linoz_o3_clim, icol);
         const auto linoz_t_clim_icol  = ekat::subview(linoz_t_clim, icol);
@@ -853,6 +858,9 @@ void MAMMicrophysics::run_impl(const double dt) {
             team, dt, rlats, cnst_offline_icol, forcings_in, atm, progs,
             photo_table, chlorine_loading, config.setsox, config.amicphys,
             config.linoz.psc_T, zenith_angle(icol), d_sfc_alb_dir_vis(icol),
+            d_sfc_flux_dir_vis(icol), snow_depth_land(icol),
+            surf_radiative_T(icol), horiz_winds_u_icol, horiz_winds_v_icol,
+            constituent_fluxes_icol,
             o3_col_dens_i, photo_rates_icol, extfrc_icol, invariants_icol,
             work_photo_table_icol, linoz_o3_clim_icol, linoz_t_clim_icol,
             linoz_o3col_clim_icol, linoz_PmL_clim_icol, linoz_dPmL_dO3_icol,
